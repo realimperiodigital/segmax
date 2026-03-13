@@ -1,357 +1,259 @@
-"use client";
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase/client'
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-type CotacaoRow = {
-  id: string;
-  produto?: string | null;
-  tipo_seguro?: string | null;
-  proposta_numero?: string | null;
-  proposta?: string | null;
-  renovacao?: boolean | null;
-  moeda?: string | null;
-  status?: string | null;
-  created_at?: string | null;
-  vigencia_inicio?: string | null;
-  vigencia_fim?: string | null;
-  corretora_id?: string | null;
-  cliente_id?: string | null;
-  usuario_id?: string | null;
-
-  corretora_nome?: string | null;
-  cliente_nome?: string | null;
-  usuario_nome?: string | null;
-};
-
-function formatarData(data?: string | null) {
-  if (!data) return "-";
-  const d = new Date(data);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString("pt-BR");
+type PageProps = {
+  params: {
+    id: string
+  }
 }
 
-function formatarStatus(status?: string | null) {
-  if (!status) return "Sem status";
-  return status;
+type QuoteRow = {
+  id: number
+  client_id: number | null
+  insurer_id: number | null
+  status: string | null
+  estimated_value: number | null
+  notes: string | null
+  technical_analysis: string | null
+  created_at?: string | null
 }
 
-function classeStatus(status?: string | null) {
-  const valor = (status || "").toLowerCase();
-
-  if (valor.includes("aprov")) {
-    return "bg-green-100 text-green-700 border-green-200";
-  }
-
-  if (valor.includes("anal")) {
-    return "bg-blue-100 text-blue-700 border-blue-200";
-  }
-
-  if (valor.includes("recus") || valor.includes("cancel")) {
-    return "bg-red-100 text-red-700 border-red-200";
-  }
-
-  return "bg-gray-100 text-gray-700 border-gray-200";
+type ClientRow = {
+  id: number
+  name: string
+  document?: string | null
 }
 
-export default function PaginaCotacoes() {
-  const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState("");
-  const [cotacoes, setCotacoes] = useState<CotacaoRow[]>([]);
-  const [busca, setBusca] = useState("");
-  const [statusFiltro, setStatusFiltro] = useState("todos");
+type InsurerRow = {
+  id: number
+  name: string
+}
 
-  async function carregarCotacoes() {
-    try {
-      setLoading(true);
-      setErro("");
+function formatMoney(value: number | null | undefined) {
+  if (value === null || value === undefined) return 'Não informado'
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value)
+}
 
-      const { data, error } = await supabase
-        .from("cotacoes")
-        .select("*")
-        .order("created_at", { ascending: false });
+function formatDate(value?: string | null) {
+  if (!value) return 'Não informado'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Não informado'
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date)
+}
 
-      if (error) {
-        throw error;
-      }
+function formatStatus(status?: string | null) {
+  if (!status) return 'Não informado'
 
-      setCotacoes((data as CotacaoRow[]) || []);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar cotações.");
-    } finally {
-      setLoading(false);
-    }
+  const map: Record<string, string> = {
+    nova: 'Nova',
+    em_analise: 'Em análise',
+    cotada: 'Cotada',
+    fechada: 'Fechada',
+    perdida: 'Perdida',
   }
 
-  useEffect(() => {
-    carregarCotacoes();
-  }, []);
+  return map[status] || status
+}
 
-  const cotacoesFiltradas = useMemo(() => {
-    let lista = [...cotacoes];
+function statusClasses(status?: string | null) {
+  switch (status) {
+    case 'nova':
+      return 'bg-blue-50 text-blue-700 ring-blue-200'
+    case 'em_analise':
+      return 'bg-yellow-50 text-yellow-700 ring-yellow-200'
+    case 'cotada':
+      return 'bg-purple-50 text-purple-700 ring-purple-200'
+    case 'fechada':
+      return 'bg-green-50 text-green-700 ring-green-200'
+    case 'perdida':
+      return 'bg-red-50 text-red-700 ring-red-200'
+    default:
+      return 'bg-gray-50 text-gray-700 ring-gray-200'
+  }
+}
 
-    if (statusFiltro !== "todos") {
-      lista = lista.filter(
-        (item) => (item.status || "").toLowerCase() === statusFiltro.toLowerCase()
-      );
-    }
+export default async function CotacaoDetalhePage({ params }: PageProps) {
+  const quoteId = Number(params.id)
 
-    if (busca.trim()) {
-      const termo = busca.toLowerCase();
+  if (!quoteId || Number.isNaN(quoteId)) {
+    notFound()
+  }
 
-      lista = lista.filter((item) => {
-        return [
-          item.produto,
-          item.tipo_seguro,
-          item.proposta_numero,
-          item.proposta,
-          item.cliente_nome,
-          item.corretora_nome,
-          item.usuario_nome,
-          item.status,
-          item.moeda,
-          item.id,
-        ]
-          .filter(Boolean)
-          .some((valor) => String(valor).toLowerCase().includes(termo));
-      });
-    }
+  const { data: quote, error: quoteError } = await supabase
+    .from('quotes')
+    .select('id, client_id, insurer_id, status, estimated_value, notes, technical_analysis, created_at')
+    .eq('id', quoteId)
+    .single()
 
-    return lista;
-  }, [cotacoes, busca, statusFiltro]);
+  if (quoteError || !quote) {
+    notFound()
+  }
 
-  const totalCotacoes = cotacoes.length;
-  const totalEmAnalise = cotacoes.filter((item) =>
-    (item.status || "").toLowerCase().includes("anal")
-  ).length;
-  const totalAprovadas = cotacoes.filter((item) =>
-    (item.status || "").toLowerCase().includes("aprov")
-  ).length;
-  const totalCanceladas = cotacoes.filter((item) => {
-    const s = (item.status || "").toLowerCase();
-    return s.includes("cancel") || s.includes("recus");
-  }).length;
+  const quoteRow = quote as QuoteRow
+
+  let client: ClientRow | null = null
+  let insurer: InsurerRow | null = null
+
+  if (quoteRow.client_id) {
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('id, name, document')
+      .eq('id', quoteRow.client_id)
+      .single()
+
+    client = (clientData as ClientRow) || null
+  }
+
+  if (quoteRow.insurer_id) {
+    const { data: insurerData } = await supabase
+      .from('insurers')
+      .select('id, name')
+      .eq('id', quoteRow.insurer_id)
+      .single()
+
+    insurer = (insurerData as InsurerRow) || null
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Cotações</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Clique no nome da cotação para abrir tudo o que foi preenchido.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Total</p>
-            <p className="mt-2 text-3xl font-bold text-gray-900">{totalCotacoes}</p>
+    <div className="min-h-screen bg-gray-50 px-4 py-6 md:px-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm text-gray-500">Cotação #{quoteRow.id}</p>
+            <h1 className="text-2xl font-bold text-gray-900">Detalhes da Cotação</h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Visualize os dados principais e a análise técnica automática.
+            </p>
           </div>
 
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Em análise</p>
-            <p className="mt-2 text-3xl font-bold text-blue-600">{totalEmAnalise}</p>
-          </div>
-
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Aprovadas</p>
-            <p className="mt-2 text-3xl font-bold text-green-600">{totalAprovadas}</p>
-          </div>
-
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Canceladas / recusadas</p>
-            <p className="mt-2 text-3xl font-bold text-red-600">{totalCanceladas}</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-4 shadow-sm">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <input
-              type="text"
-              placeholder="Buscar por produto, proposta, cliente, usuário ou corretora"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              className="rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
-            />
-
-            <select
-              value={statusFiltro}
-              onChange={(e) => setStatusFiltro(e.target.value)}
-              className="rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/cotacoes"
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
             >
-              <option value="todos">Todos os status</option>
-              <option value="em análise">Em análise</option>
-              <option value="aprovada">Aprovada</option>
-              <option value="cancelada">Cancelada</option>
-              <option value="recusada">Recusada</option>
-            </select>
-
-            <button
-              onClick={carregarCotacoes}
-              className="rounded-xl bg-black px-4 py-3 font-medium text-white hover:opacity-90"
+              Voltar
+            </Link>
+            <Link
+              href={`/cotacoes/${quoteRow.id}/editar`}
+              className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black"
             >
-              Atualizar lista
-            </button>
+              Editar cotação
+            </Link>
           </div>
         </div>
 
-        {erro && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {erro}
-          </div>
-        )}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-1">
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Resumo</h2>
 
-        <div className="rounded-2xl border bg-white shadow-sm">
-          {loading ? (
-            <div className="p-6 text-sm text-gray-500">Carregando cotações...</div>
-          ) : cotacoesFiltradas.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">Nenhuma cotação encontrada.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left">
-                <thead className="border-b bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-4 text-sm font-semibold text-gray-700">
-                      Cotação
-                    </th>
-                    <th className="px-6 py-4 text-sm font-semibold text-gray-700">
-                      Cliente
-                    </th>
-                    <th className="px-6 py-4 text-sm font-semibold text-gray-700">
-                      Corretora
-                    </th>
-                    <th className="px-6 py-4 text-sm font-semibold text-gray-700">
-                      Usuário
-                    </th>
-                    <th className="px-6 py-4 text-sm font-semibold text-gray-700">
-                      Vigência
-                    </th>
-                    <th className="px-6 py-4 text-sm font-semibold text-gray-700">
-                      Status
-                    </th>
-                    <th className="px-6 py-4 text-sm font-semibold text-gray-700">
-                      Cadastro
-                    </th>
-                    <th className="px-6 py-4 text-sm font-semibold text-gray-700">
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
+              <div className="mt-5 space-y-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</p>
+                  <div className="mt-2">
+                    <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ring-1 ${statusClasses(quoteRow.status)}`}>
+                      {formatStatus(quoteRow.status)}
+                    </span>
+                  </div>
+                </div>
 
-                <tbody>
-                  {cotacoesFiltradas.map((cotacao) => {
-                    const titulo =
-                      cotacao.produto ||
-                      cotacao.tipo_seguro ||
-                      "Cotação sem título";
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Valor estimado</p>
+                  <p className="mt-1 text-base font-semibold text-gray-900">
+                    {formatMoney(quoteRow.estimated_value)}
+                  </p>
+                </div>
 
-                    const proposta =
-                      cotacao.proposta_numero || cotacao.proposta || "-";
-
-                    return (
-                      <tr key={cotacao.id} className="border-b last:border-b-0">
-                        <td className="px-6 py-5 align-top">
-                          <div className="space-y-2">
-                            <Link
-                              href={`/cotacoes/${cotacao.id}`}
-                              className="block text-lg font-bold text-blue-700 hover:underline"
-                            >
-                              {titulo}
-                            </Link>
-
-                            <div className="text-sm text-gray-600">
-                              <p>
-                                <span className="font-medium">Proposta:</span>{" "}
-                                {proposta}
-                              </p>
-                              <p>
-                                <span className="font-medium">Renovação:</span>{" "}
-                                {cotacao.renovacao ? "Sim" : "Não"}
-                              </p>
-                              <p>
-                                <span className="font-medium">Moeda:</span>{" "}
-                                {cotacao.moeda || "BRL"}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="px-6 py-5 align-top text-base font-semibold text-gray-900">
-                          {cotacao.cliente_nome || "-"}
-                        </td>
-
-                        <td className="px-6 py-5 align-top text-base font-semibold text-gray-900">
-                          {cotacao.corretora_nome || "-"}
-                        </td>
-
-                        <td className="px-6 py-5 align-top text-base font-semibold text-gray-900">
-                          {cotacao.usuario_nome || "-"}
-                        </td>
-
-                        <td className="px-6 py-5 align-top text-sm text-gray-700">
-                          <p>
-                            <span className="font-semibold">Início:</span>{" "}
-                            {formatarData(cotacao.vigencia_inicio)}
-                          </p>
-                          <p className="mt-1">
-                            <span className="font-semibold">Fim:</span>{" "}
-                            {formatarData(cotacao.vigencia_fim)}
-                          </p>
-                        </td>
-
-                        <td className="px-6 py-5 align-top">
-                          <span
-                            className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${classeStatus(
-                              cotacao.status
-                            )}`}
-                          >
-                            {formatarStatus(cotacao.status)}
-                          </span>
-                        </td>
-
-                        <td className="px-6 py-5 align-top text-sm font-medium text-gray-700">
-                          {formatarData(cotacao.created_at)}
-                        </td>
-
-                        <td className="px-6 py-5 align-top">
-                          <div className="flex flex-col gap-2">
-                            <Link
-                              href={`/cotacoes/${cotacao.id}`}
-                              className="rounded-xl border border-gray-300 px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
-                            >
-                              Abrir
-                            </Link>
-
-                            <Link
-                              href={`/cotacoes/${cotacao.id}/ctr`}
-                              className="rounded-xl border border-gray-300 px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
-                            >
-                              CTR
-                            </Link>
-
-                            <Link
-                              href={`/cotacoes/${cotacao.id}/resultado`}
-                              className="rounded-xl bg-black px-4 py-2 text-center text-sm font-medium text-white hover:opacity-90"
-                            >
-                              Resultado
-                            </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Criada em</p>
+                  <p className="mt-1 text-sm text-gray-800">
+                    {formatDate(quoteRow.created_at)}
+                  </p>
+                </div>
+              </div>
             </div>
-          )}
+
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Cliente</h2>
+
+              <div className="mt-5 space-y-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Nome</p>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {client?.name || 'Não informado'}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Documento</p>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {client?.document || 'Não informado'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Seguradora</h2>
+
+              <div className="mt-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Nome</p>
+                <p className="mt-1 text-sm text-gray-900">
+                  {insurer?.name || 'Não informado'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6 lg:col-span-2">
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Observações</h2>
+
+              <div className="mt-4 rounded-xl bg-gray-50 p-4 ring-1 ring-gray-200">
+                <p className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-800">
+                  {quoteRow.notes?.trim() || 'Nenhuma observação informada.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Análise Técnica</h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Texto gerado automaticamente com base no questionário da cotação.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4">
+                <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-800">
+                  {quoteRow.technical_analysis?.trim() || 'Nenhuma análise técnica gerada para esta cotação.'}
+                </pre>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Próximo passo ideal</h2>
+
+              <div className="mt-4 rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200">
+                <p className="text-sm leading-6 text-amber-900">
+                  Agora o SegMax já consegue salvar e exibir a análise. O próximo passo forte é criar o
+                  motor que transforma respostas do questionário em sugestão de coberturas, limites,
+                  observações comerciais e aumento de ticket médio.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
