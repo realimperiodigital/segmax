@@ -1,356 +1,496 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/client";
 
-type StatusCorretora = "ativa" | "inativa" | "suspensa" | "cancelada";
+type UsuarioSistema = {
+  id: string;
+  nome: string | null;
+  email: string | null;
+  role: string | null;
+  corretora_id: string | null;
+  status: string | null;
+  ativo: boolean | null;
+  excluido: boolean | null;
+};
+
+type PlanoCorretora = "Prime" | "Elite" | "Executive" | "Full";
+type StatusCorretora = "ativo" | "suspenso" | "bloqueado";
 
 export default function NovaCorretoraPage() {
   const router = useRouter();
 
-  const [nomeFantasia, setNomeFantasia] = useState("");
-  const [razaoSocial, setRazaoSocial] = useState("");
-  const [cnpj, setCnpj] = useState("");
-  const [responsavelNome, setResponsavelNome] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [email, setEmail] = useState("");
-  const [login, setLogin] = useState("");
-  const [status, setStatus] = useState<StatusCorretora>("ativa");
-  const [loading, setLoading] = useState(false);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
+  const [usuario, setUsuario] = useState<UsuarioSistema | null>(null);
 
-  function limparCnpj(valor: string) {
-    return valor.replace(/\D/g, "");
-  }
+  const [form, setForm] = useState({
+    nomeFantasia: "",
+    razaoSocial: "",
+    cnpj: "",
+    email: "",
+    telefone: "",
+    responsavel: "",
+    plano: "Prime" as PlanoCorretora,
+    status: "ativo" as StatusCorretora,
+    cep: "",
+    endereco: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cidade: "",
+    estado: "",
+    observacoes: "",
+  });
 
-  function limparTelefone(valor: string) {
-    return valor.replace(/\D/g, "");
-  }
+  useEffect(() => {
+    async function verificarAcesso() {
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
 
-  function formatarCnpj(valor: string) {
-    const numeros = valor.replace(/\D/g, "").slice(0, 14);
+        if (authError) {
+          console.error("Erro ao obter usuário autenticado:", authError);
+          setErro("Erro ao validar login.");
+          setCarregando(false);
+          return;
+        }
 
-    if (numeros.length <= 2) return numeros;
-    if (numeros.length <= 5) return numeros.replace(/^(\d{2})(\d+)/, "$1.$2");
-    if (numeros.length <= 8) return numeros.replace(/^(\d{2})(\d{3})(\d+)/, "$1.$2.$3");
-    if (numeros.length <= 12) {
-      return numeros.replace(/^(\d{2})(\d{3})(\d{3})(\d+)/, "$1.$2.$3/$4");
+        if (!user) {
+          router.push("/login");
+          return;
+        }
+
+        const { data: usuarioSistema, error: usuarioError } = await supabase
+          .from("usuarios")
+          .select("id, nome, email, role, corretora_id, status, ativo, excluido")
+          .eq("id", user.id)
+          .maybeSingle<UsuarioSistema>();
+
+        if (usuarioError) {
+          console.error("Erro ao buscar usuário no sistema:", usuarioError);
+          setErro("Erro ao buscar seu usuário no sistema.");
+          setCarregando(false);
+          return;
+        }
+
+        if (!usuarioSistema) {
+          setErro("Não encontrei seu usuário no sistema.");
+          setCarregando(false);
+          return;
+        }
+
+        if (usuarioSistema.excluido === true) {
+          setErro("Seu usuário está excluído.");
+          setCarregando(false);
+          return;
+        }
+
+        if (usuarioSistema.ativo === false) {
+          setErro("Seu usuário está inativo.");
+          setCarregando(false);
+          return;
+        }
+
+        if (usuarioSistema.status !== "ativo") {
+          setErro("Seu usuário não está com status ativo.");
+          setCarregando(false);
+          return;
+        }
+
+        if (usuarioSistema.role !== "master") {
+          setErro("Acesso não liberado.");
+          setCarregando(false);
+          return;
+        }
+
+        setUsuario(usuarioSistema);
+        setCarregando(false);
+      } catch (error) {
+        console.error("Erro inesperado ao verificar acesso:", error);
+        setErro("Erro inesperado ao verificar acesso.");
+        setCarregando(false);
+      }
     }
 
-    return numeros.replace(
-      /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*$/,
-      "$1.$2.$3/$4-$5"
-    );
+    verificarAcesso();
+  }, [router]);
+
+  function atualizarCampo(
+    campo: keyof typeof form,
+    valor: string
+  ) {
+    setForm((prev) => ({
+      ...prev,
+      [campo]: valor,
+    }));
   }
 
-  function formatarTelefone(valor: string) {
-    const numeros = valor.replace(/\D/g, "").slice(0, 11);
-
-    if (numeros.length <= 2) return numeros;
-    if (numeros.length <= 7) return numeros.replace(/^(\d{2})(\d+)/, "($1) $2");
-    if (numeros.length <= 10) {
-      return numeros.replace(/^(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
-    }
-
-    return numeros.replace(/^(\d{2})(\d{5})(\d{4}).*$/, "($1) $2-$3");
-  }
-
-  async function salvarCorretora(e: React.FormEvent<HTMLFormElement>) {
+  async function salvarCorretora(e: React.FormEvent) {
     e.preventDefault();
+    setErro("");
+    setSucesso("");
 
-    if (loading) return;
-
-    const nomeFantasiaTratado = nomeFantasia.trim();
-    const razaoSocialTratada = razaoSocial.trim();
-    const cnpjTratado = limparCnpj(cnpj);
-    const responsavelTratado = responsavelNome.trim();
-    const telefoneTratado = limparTelefone(telefone);
-    const emailTratado = email.trim().toLowerCase();
-    const loginTratado = login.trim().toLowerCase();
-
-    if (!nomeFantasiaTratado) {
-      alert("Preencha o nome fantasia.");
+    if (!form.nomeFantasia.trim()) {
+      setErro("Preencha o nome fantasia.");
       return;
     }
 
-    if (!emailTratado) {
-      alert("Preencha o email.");
+    if (!form.razaoSocial.trim()) {
+      setErro("Preencha a razão social.");
       return;
     }
 
-    if (!loginTratado) {
-      alert("Preencha o login.");
+    if (!form.cnpj.trim()) {
+      setErro("Preencha o CNPJ.");
       return;
     }
 
-    if (!["ativa", "inativa", "suspensa", "cancelada"].includes(status)) {
-      alert("Status inválido.");
+    if (!form.email.trim()) {
+      setErro("Preencha o email da corretora.");
       return;
     }
 
-    if (cnpjTratado && cnpjTratado.length !== 14) {
-      alert("O CNPJ precisa ter 14 números.");
+    if (!form.responsavel.trim()) {
+      setErro("Preencha o responsável.");
       return;
     }
-
-    setLoading(true);
 
     try {
-      const { data: corretoraEmailExistente, error: erroEmailExistente } = await supabase
-        .from("corretoras")
-        .select("id, nome_fantasia")
-        .eq("email", emailTratado)
-        .eq("excluido", false)
-        .maybeSingle();
-
-      if (erroEmailExistente) {
-        alert(`Erro ao validar email: ${erroEmailExistente.message}`);
-        return;
-      }
-
-      if (corretoraEmailExistente) {
-        alert("Já existe uma corretora cadastrada com este email.");
-        return;
-      }
-
-      const { data: corretoraLoginExistente, error: erroLoginExistente } = await supabase
-        .from("corretoras")
-        .select("id, nome_fantasia")
-        .eq("login", loginTratado)
-        .eq("excluido", false)
-        .maybeSingle();
-
-      if (erroLoginExistente) {
-        alert(`Erro ao validar login: ${erroLoginExistente.message}`);
-        return;
-      }
-
-      if (corretoraLoginExistente) {
-        alert("Já existe uma corretora cadastrada com este login.");
-        return;
-      }
-
-      if (cnpjTratado) {
-        const { data: corretoraCnpjExistente, error: erroCnpjExistente } = await supabase
-          .from("corretoras")
-          .select("id, nome_fantasia, cnpj")
-          .eq("cnpj", cnpjTratado)
-          .eq("excluido", false)
-          .maybeSingle();
-
-        if (erroCnpjExistente) {
-          alert(`Erro ao validar CNPJ: ${erroCnpjExistente.message}`);
-          return;
-        }
-
-        if (corretoraCnpjExistente) {
-          alert(
-            `Já existe uma corretora cadastrada com este CNPJ.${corretoraCnpjExistente.nome_fantasia ? ` Corretora encontrada: ${corretoraCnpjExistente.nome_fantasia}.` : ""}`
-          );
-          return;
-        }
-      }
+      setSalvando(true);
 
       const payload = {
-        nome_fantasia: nomeFantasiaTratado,
-        razao_social: razaoSocialTratada || null,
-        cnpj: cnpjTratado || null,
-        responsavel_nome: responsavelTratado || null,
-        telefone: telefoneTratado || null,
-        email: emailTratado,
-        login: loginTratado,
-        status,
-        ativo: status === "ativa",
+        nome_fantasia: form.nomeFantasia.trim(),
+        razao_social: form.razaoSocial.trim(),
+        cnpj: form.cnpj.trim(),
+        email: form.email.trim().toLowerCase(),
+        telefone: form.telefone.trim(),
+        responsavel: form.responsavel.trim(),
+        plano: form.plano,
+        status: form.status,
+        cep: form.cep.trim(),
+        endereco: form.endereco.trim(),
+        numero: form.numero.trim(),
+        complemento: form.complemento.trim(),
+        bairro: form.bairro.trim(),
+        cidade: form.cidade.trim(),
+        estado: form.estado.trim(),
+        observacoes: form.observacoes.trim(),
+        ativo: form.status === "ativo",
         excluido: false,
       };
 
-      const { error } = await supabase.from("corretoras").insert([payload]);
+      const { error: insertError } = await supabase
+        .from("corretoras")
+        .insert(payload);
 
-      if (error) {
-        if (error.message.toLowerCase().includes("corretoras_cnpj_key")) {
-          alert("Já existe uma corretora cadastrada com este CNPJ.");
-          return;
-        }
-
-        if (error.message.toLowerCase().includes("corretoras_email")) {
-          alert("Já existe uma corretora cadastrada com este email.");
-          return;
-        }
-
-        if (error.message.toLowerCase().includes("corretoras_login")) {
-          alert("Já existe uma corretora cadastrada com este login.");
-          return;
-        }
-
-        alert(`Erro ao salvar corretora: ${error.message}`);
+      if (insertError) {
+        console.error("Erro ao cadastrar corretora:", insertError);
+        setErro(
+          insertError.message || "Não foi possível cadastrar a corretora."
+        );
+        setSalvando(false);
         return;
       }
 
-      alert("Corretora cadastrada com sucesso.");
-      router.push("/corretoras");
+      setSucesso("Corretora cadastrada com sucesso.");
+
+      setForm({
+        nomeFantasia: "",
+        razaoSocial: "",
+        cnpj: "",
+        email: "",
+        telefone: "",
+        responsavel: "",
+        plano: "Prime",
+        status: "ativo",
+        cep: "",
+        endereco: "",
+        numero: "",
+        complemento: "",
+        bairro: "",
+        cidade: "",
+        estado: "",
+        observacoes: "",
+      });
+
+      setSalvando(false);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Erro inesperado ao salvar corretora.";
-      alert(message);
-    } finally {
-      setLoading(false);
+      console.error("Erro inesperado ao salvar corretora:", error);
+      setErro("Erro inesperado ao salvar corretora.");
+      setSalvando(false);
     }
   }
 
-  return (
-    <div style={pageStyle}>
-      <div>
-        <h1 style={titleStyle}>Nova Corretora</h1>
-        <p style={subtitleStyle}>
-          Cadastre a corretora base para depois criar usuários, clientes e cotações.
-        </p>
-      </div>
-
-      <form onSubmit={salvarCorretora} style={formCard}>
-        <input
-          type="text"
-          placeholder="Nome fantasia"
-          value={nomeFantasia}
-          onChange={(e) => setNomeFantasia(e.target.value)}
-          style={inputStyle}
-        />
-
-        <input
-          type="text"
-          placeholder="Razão social"
-          value={razaoSocial}
-          onChange={(e) => setRazaoSocial(e.target.value)}
-          style={inputStyle}
-        />
-
-        <input
-          type="text"
-          placeholder="CNPJ"
-          value={cnpj}
-          onChange={(e) => setCnpj(formatarCnpj(e.target.value))}
-          style={inputStyle}
-        />
-
-        <input
-          type="text"
-          placeholder="Nome do responsável"
-          value={responsavelNome}
-          onChange={(e) => setResponsavelNome(e.target.value)}
-          style={inputStyle}
-        />
-
-        <input
-          type="text"
-          placeholder="Telefone"
-          value={telefone}
-          onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
-          style={inputStyle}
-        />
-
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={inputStyle}
-        />
-
-        <input
-          type="text"
-          placeholder="Login"
-          value={login}
-          onChange={(e) => setLogin(e.target.value)}
-          style={inputStyle}
-        />
-
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as StatusCorretora)}
-          style={inputStyle}
-        >
-          <option value="ativa">Ativa</option>
-          <option value="inativa">Inativa</option>
-          <option value="suspensa">Suspensa</option>
-          <option value="cancelada">Cancelada</option>
-        </select>
-
-        <div style={actionsRow}>
-          <button type="submit" disabled={loading} style={primaryButton}>
-            {loading ? "Salvando..." : "Salvar Corretora"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push("/corretoras")}
-            style={secondaryButton}
-          >
-            Voltar
-          </button>
+  if (carregando) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#020817] px-6 text-white">
+        <div className="rounded-2xl border border-amber-500/20 bg-[#071224] px-8 py-6 text-center">
+          <p className="text-lg font-semibold">Verificando acesso...</p>
         </div>
-      </form>
+      </div>
+    );
+  }
+
+  if (erro && !usuario) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#020817] px-6 text-white">
+        <div className="w-full max-w-5xl rounded-[36px] border border-red-500/30 bg-[#071224] px-8 py-12 text-center shadow-2xl">
+          <h1 className="mb-4 text-4xl font-bold text-red-300">
+            Acesso não liberado
+          </h1>
+
+          <p className="mb-8 text-2xl text-slate-200">{erro}</p>
+
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <button
+              onClick={() => router.push("/login")}
+              className="rounded-2xl bg-amber-400 px-8 py-4 text-xl font-semibold text-black transition hover:opacity-90"
+            >
+              Ir para login
+            </button>
+
+            <button
+              onClick={() => router.back()}
+              className="rounded-2xl border border-slate-600 px-8 py-4 text-xl font-semibold text-white transition hover:bg-slate-800"
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#020817] p-8 text-white">
+      <div className="mx-auto max-w-7xl rounded-3xl border border-amber-500/20 bg-[#071224] p-8 shadow-2xl">
+        <div className="mb-8 flex flex-col gap-3 border-b border-slate-800 pb-6">
+          <p className="text-sm uppercase tracking-[0.2em] text-amber-300">
+            SegMax CRM
+          </p>
+
+          <h1 className="text-3xl font-bold text-white">
+            Cadastrar nova corretora
+          </h1>
+
+          <p className="text-slate-300">
+            Acesso validado para {usuario?.nome || "Super Admin"}.
+          </p>
+        </div>
+
+        {erro && usuario && (
+          <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-red-200">
+            {erro}
+          </div>
+        )}
+
+        {sucesso && (
+          <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-emerald-200">
+            {sucesso}
+          </div>
+        )}
+
+        <form onSubmit={salvarCorretora} className="space-y-8">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Nome fantasia</label>
+              <input
+                value={form.nomeFantasia}
+                onChange={(e) => atualizarCampo("nomeFantasia", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="Ex: SegMax Corretora"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Razão social</label>
+              <input
+                value={form.razaoSocial}
+                onChange={(e) => atualizarCampo("razaoSocial", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="Ex: SegMax Corretora de Seguros Ltda"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">CNPJ</label>
+              <input
+                value={form.cnpj}
+                onChange={(e) => atualizarCampo("cnpj", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="00.000.000/0000-00"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Email</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => atualizarCampo("email", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="contato@corretora.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Telefone</label>
+              <input
+                value={form.telefone}
+                onChange={(e) => atualizarCampo("telefone", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="(11) 99999-9999"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Responsável</label>
+              <input
+                value={form.responsavel}
+                onChange={(e) => atualizarCampo("responsavel", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="Nome do responsável"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Plano</label>
+              <select
+                value={form.plano}
+                onChange={(e) =>
+                  atualizarCampo("plano", e.target.value as PlanoCorretora)
+                }
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+              >
+                <option value="Prime">Prime</option>
+                <option value="Elite">Elite</option>
+                <option value="Executive">Executive</option>
+                <option value="Full">Full</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Status</label>
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  atualizarCampo("status", e.target.value as StatusCorretora)
+                }
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+              >
+                <option value="ativo">Ativo</option>
+                <option value="suspenso">Suspenso</option>
+                <option value="bloqueado">Bloqueado</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">CEP</label>
+              <input
+                value={form.cep}
+                onChange={(e) => atualizarCampo("cep", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="00000-000"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Endereço</label>
+              <input
+                value={form.endereco}
+                onChange={(e) => atualizarCampo("endereco", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="Rua, avenida, etc."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Número</label>
+              <input
+                value={form.numero}
+                onChange={(e) => atualizarCampo("numero", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="123"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Complemento</label>
+              <input
+                value={form.complemento}
+                onChange={(e) => atualizarCampo("complemento", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="Sala, andar, bloco"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Bairro</label>
+              <input
+                value={form.bairro}
+                onChange={(e) => atualizarCampo("bairro", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="Bairro"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Cidade</label>
+              <input
+                value={form.cidade}
+                onChange={(e) => atualizarCampo("cidade", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="Cidade"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Estado</label>
+              <input
+                value={form.estado}
+                onChange={(e) => atualizarCampo("estado", e.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 text-white outline-none transition focus:border-amber-400"
+                placeholder="UF"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Observações</label>
+            <textarea
+              value={form.observacoes}
+              onChange={(e) => atualizarCampo("observacoes", e.target.value)}
+              rows={5}
+              className="w-full rounded-2xl border border-slate-700 bg-slate-900/50 px-4 py-4 text-white outline-none transition focus:border-amber-400"
+              placeholder="Anotações internas sobre a corretora"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 pt-2">
+            <button
+              type="submit"
+              disabled={salvando}
+              className="rounded-2xl bg-amber-400 px-8 py-4 text-lg font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {salvando ? "Salvando..." : "Salvar corretora"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/corretoras")}
+              className="rounded-2xl border border-slate-600 px-8 py-4 text-lg font-semibold text-white transition hover:bg-slate-800"
+            >
+              Ver corretoras
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
-
-const pageStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 16,
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 32,
-  color: "#111827",
-};
-
-const subtitleStyle: React.CSSProperties = {
-  margin: "6px 0 0 0",
-  color: "#6b7280",
-  fontSize: 15,
-};
-
-const formCard: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 16,
-  padding: 24,
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  border: "1px solid #eef2f7",
-  display: "grid",
-  gap: 14,
-  maxWidth: 760,
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: 12,
-  border: "1px solid #d1d5db",
-  borderRadius: 10,
-  fontSize: 15,
-  background: "#fff",
-  width: "100%",
-};
-
-const actionsRow: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  marginTop: 8,
-};
-
-const primaryButton: React.CSSProperties = {
-  padding: "12px 16px",
-  background: "#07163a",
-  color: "#ffffff",
-  border: "none",
-  borderRadius: 10,
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const secondaryButton: React.CSSProperties = {
-  padding: "12px 16px",
-  background: "#e5e7eb",
-  color: "#111827",
-  border: "none",
-  borderRadius: 10,
-  cursor: "pointer",
-  fontWeight: 700,
-};
