@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type UsuarioSistema = {
@@ -20,6 +20,28 @@ type UsuarioSistema = {
 
 type PlanoCorretora = "Prime" | "Elite" | "Executive" | "Full";
 type StatusCorretora = "ativo" | "suspenso" | "bloqueado";
+
+type Corretora = {
+  id: string;
+  nome_fantasia: string | null;
+  razao_social: string | null;
+  cnpj: string | null;
+  email: string | null;
+  telefone: string | null;
+  responsavel: string | null;
+  plano: string | null;
+  status: string | null;
+  cep: string | null;
+  endereco: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  observacoes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
 
 type FormState = {
   nomeFantasia: string;
@@ -81,8 +103,11 @@ function formatarCEP(valor: string) {
   return numeros.replace(/^(\d{5})(\d)/, "$1-$2");
 }
 
-export default function NovaCorretoraPage() {
+export default function EditarCorretoraPage() {
   const router = useRouter();
+  const params = useParams();
+
+  const corretoraId = String(params?.id ?? "");
 
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -206,7 +231,7 @@ export default function NovaCorretoraPage() {
     return campos.some((campo) => perfisLiberados.includes(campo));
   }
 
-  async function validarAcesso() {
+  async function carregarCorretora() {
     try {
       setLoading(true);
       setErro(null);
@@ -230,19 +255,60 @@ export default function NovaCorretoraPage() {
       const permitido = usuarioTemAcesso(email, usuarioSistema);
 
       if (!permitido) {
-        setErro("Acesso não liberado para cadastrar corretoras.");
+        setErro("Acesso não liberado para editar corretoras.");
+        setLoading(false);
+        return;
       }
+
+      if (!corretoraId) {
+        setErro("ID da corretora não encontrado.");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("corretoras")
+        .select("*")
+        .eq("id", corretoraId)
+        .maybeSingle();
+
+      if (error || !data) {
+        setErro("Não foi possível localizar esta corretora.");
+        setLoading(false);
+        return;
+      }
+
+      const corretora = data as Corretora;
+
+      setForm({
+        nomeFantasia: corretora.nome_fantasia || "",
+        razaoSocial: corretora.razao_social || "",
+        cnpj: formatarCNPJ(corretora.cnpj || ""),
+        email: corretora.email || "",
+        telefone: formatarTelefone(corretora.telefone || ""),
+        responsavel: corretora.responsavel || "",
+        plano: (corretora.plano as PlanoCorretora) || "Prime",
+        status: (corretora.status as StatusCorretora) || "ativo",
+        cep: formatarCEP(corretora.cep || ""),
+        endereco: corretora.endereco || "",
+        numero: corretora.numero || "",
+        complemento: corretora.complemento || "",
+        bairro: corretora.bairro || "",
+        cidade: corretora.cidade || "",
+        estado: corretora.estado || "",
+        observacoes: corretora.observacoes || "",
+      });
     } catch (e) {
-      console.error("Erro ao validar acesso:", e);
-      setErro("Erro ao validar acesso desta área.");
+      console.error("Erro ao carregar corretora:", e);
+      setErro("Erro inesperado ao carregar a corretora.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    validarAcesso();
-  }, []);
+    carregarCorretora();
+  }, [corretoraId]);
 
   function atualizarCampo<K extends keyof FormState>(campo: K, valor: FormState[K]) {
     setForm((prev) => ({
@@ -302,15 +368,6 @@ export default function NovaCorretoraPage() {
         return;
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.user) {
-        router.replace("/login");
-        return;
-      }
-
       const payload = {
         nome_fantasia: form.nomeFantasia.trim(),
         razao_social: form.razaoSocial.trim(),
@@ -328,43 +385,27 @@ export default function NovaCorretoraPage() {
         cidade: form.cidade.trim() || null,
         estado: form.estado.trim() || null,
         observacoes: form.observacoes.trim() || null,
-        criado_por: session.user.id,
+        updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase.from("corretoras").insert(payload);
+      const { error } = await supabase
+        .from("corretoras")
+        .update(payload)
+        .eq("id", corretoraId);
 
       if (error) {
-        setErro(error.message || "Não foi possível cadastrar a corretora.");
+        setErro(error.message || "Não foi possível atualizar a corretora.");
         return;
       }
 
-      setSucesso("Corretora cadastrada com sucesso.");
-
-      setForm({
-        nomeFantasia: "",
-        razaoSocial: "",
-        cnpj: "",
-        email: "",
-        telefone: "",
-        responsavel: "",
-        plano: "Prime",
-        status: "ativo",
-        cep: "",
-        endereco: "",
-        numero: "",
-        complemento: "",
-        bairro: "",
-        cidade: "",
-        estado: "",
-        observacoes: "",
-      });
+      setSucesso("Corretora atualizada com sucesso.");
 
       setTimeout(() => {
         router.push("/corretoras");
       }, 900);
     } catch (e) {
-      console.error("Erro ao salvar corretora:", e);
-      setErro("Erro inesperado ao cadastrar corretora.");
+      console.error("Erro ao atualizar corretora:", e);
+      setErro("Erro inesperado ao atualizar a corretora.");
     } finally {
       setSalvando(false);
     }
@@ -416,7 +457,7 @@ export default function NovaCorretoraPage() {
             }}
           />
           <h3 style={{ fontSize: 28, margin: 0, fontWeight: 700 }}>
-            Carregando área de cadastro...
+            Carregando corretora...
           </h3>
           <style jsx>{`
             @keyframes spin {
@@ -557,7 +598,7 @@ export default function NovaCorretoraPage() {
                   letterSpacing: "-0.03em",
                 }}
               >
-                Nova Corretora
+                Editar Corretora
               </h1>
 
               <p
@@ -569,7 +610,7 @@ export default function NovaCorretoraPage() {
                   lineHeight: 1.7,
                 }}
               >
-                Cadastre uma nova corretora mantendo o mesmo padrão preto, branco e
+                Atualize os dados da corretora com o mesmo padrão preto, branco e
                 dourado do SegMax.
               </p>
             </div>
@@ -588,7 +629,7 @@ export default function NovaCorretoraPage() {
 
               <button
                 type="submit"
-                form="form-nova-corretora"
+                form="form-editar-corretora"
                 disabled={salvando}
                 style={{
                   ...botaoPrimario,
@@ -596,7 +637,7 @@ export default function NovaCorretoraPage() {
                   cursor: salvando ? "not-allowed" : "pointer",
                 }}
               >
-                {salvando ? "Salvando..." : "Salvar corretora"}
+                {salvando ? "Salvando..." : "Salvar alterações"}
               </button>
             </div>
           </div>
@@ -625,7 +666,7 @@ export default function NovaCorretoraPage() {
           </section>
         )}
 
-        <form id="form-nova-corretora" onSubmit={handleSubmit}>
+        <form id="form-editar-corretora" onSubmit={handleSubmit}>
           <section
             style={{
               display: "grid",
@@ -890,7 +931,7 @@ export default function NovaCorretoraPage() {
                 cursor: salvando ? "not-allowed" : "pointer",
               }}
             >
-              {salvando ? "Salvando..." : "Salvar corretora"}
+              {salvando ? "Salvando..." : "Salvar alterações"}
             </button>
           </section>
         </form>

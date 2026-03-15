@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
 import "./globals.css";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "SEGMAX CRM",
-  description: "Gestão profissional para corretoras de seguros",
+  title: "SegMax CRM",
+  description: "CRM premium para corretoras de seguros",
 };
 
 export default function RootLayout({
@@ -13,7 +13,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className="bg-[#06070a] text-white antialiased">{children}</body>
+      <body className="min-h-screen bg-[#050505] text-white antialiased">
+        {children}
+      </body>
     </html>
   );
 }

@@ -1,139 +1,234 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function handleLogin(e: React.FormEvent) {
+  async function login(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setErro("");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      password,
+      password: senha,
     });
 
     if (error) {
-      setErro("Email ou senha inválidos.");
+      setErro("E-mail ou senha inválidos.");
       setLoading(false);
       return;
     }
 
-    const userId = data.user.id;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role, status")
-      .eq("id", userId)
+    if (!user) {
+      setErro("Usuário não encontrado após o login.");
+      setLoading(false);
+      return;
+    }
+
+    const { data: usuarioBanco, error: usuarioError } = await supabase
+      .from("usuarios")
+      .select("id, permissao, status, ativo")
+      .eq("id", user.id)
       .single();
 
-    if (profileError || !profile) {
-      setErro("Perfil não encontrado.");
+    if (usuarioError || !usuarioBanco) {
+      setErro("Seu acesso ainda não foi configurado na tabela usuarios.");
       setLoading(false);
       return;
     }
 
-    if (profile.status !== "ativo") {
-      setErro("Usuário desativado.");
+    if (usuarioBanco.status !== "ativo" || usuarioBanco.ativo !== true) {
+      setErro("Seu acesso está inativo ou bloqueado.");
       setLoading(false);
       return;
     }
 
-    if (profile.role === "super_master") {
-      router.push("/master");
-      return;
-    }
-
-    if (profile.role === "master_tecnico") {
-      router.push("/master/tecnico");
-      return;
-    }
-
-    if (profile.role === "master_financeiro") {
-      router.push("/master/financeiro");
-      return;
-    }
-
-    setErro("Permissão inválida.");
-    setLoading(false);
+    router.push("/dashboard");
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#06070a] px-4">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(212,166,58,0.16),transparent_35%),radial-gradient(circle_at_bottom,rgba(192,198,210,0.08),transparent_30%)]" />
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#000",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <div
+        style={{
+          width: "420px",
+          padding: "40px",
+          background: "rgba(0,0,0,0.85)",
+          borderRadius: "14px",
+          border: "1px solid rgba(255,215,0,0.2)",
+          boxShadow: "0 0 30px rgba(255,215,0,0.15)",
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: "30px" }}>
+          <img
+            src="/segmax-logo.png"
+            alt="SegMax"
+            style={{
+              width: "180px",
+              margin: "0 auto",
+              marginBottom: "20px",
+              display: "block",
+            }}
+          />
 
-      <div className="relative z-10 w-full max-w-md rounded-[30px] border border-[#262a33] bg-[#101116]/95 p-8 shadow-[0_25px_90px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-5 flex justify-center">
-            <Image
-              src="/segmax-logo.png"
-              alt="Logo SegMax"
-              width={220}
-              height={220}
-              className="h-auto w-[170px] object-contain md:w-[200px]"
-              priority
-            />
-          </div>
-
-          <p className="mt-2 text-sm text-[#a9afba]">
-            Acesso interno do sistema
-          </p>
+          <h2
+            style={{
+              color: "#fff",
+              fontSize: "22px",
+              fontWeight: 600,
+              margin: 0,
+            }}
+          >
+            Acesso à Plataforma
+          </h2>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#d8dde6]">
-              Email
+        <form onSubmit={login}>
+          <div style={{ marginBottom: "18px" }}>
+            <label
+              style={{
+                color: "#d4af37",
+                fontSize: "14px",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              E-mail
             </label>
+
             <input
               type="email"
-              placeholder="Digite seu email"
-              className="w-full rounded-2xl border border-[#2a2d34] bg-[#181a20] px-4 py-3 text-white outline-none transition focus:border-[#d4a63a] focus:ring-2 focus:ring-[#d4a63a]/20"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="seuemail@empresa.com"
               required
+              style={{
+                width: "100%",
+                padding: "12px",
+                background: "#0a0a0a",
+                border: "1px solid #333",
+                borderRadius: "8px",
+                color: "#fff",
+                fontSize: "14px",
+                outline: "none",
+              }}
             />
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#d8dde6]">
+          <div style={{ marginBottom: "20px" }}>
+            <label
+              style={{
+                color: "#d4af37",
+                fontSize: "14px",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               Senha
             </label>
-            <input
-              type="password"
-              placeholder="Digite sua senha"
-              className="w-full rounded-2xl border border-[#2a2d34] bg-[#181a20] px-4 py-3 text-white outline-none transition focus:border-[#d4a63a] focus:ring-2 focus:ring-[#d4a63a]/20"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+
+            <div style={{ position: "relative" }}>
+              <input
+                type={mostrarSenha ? "text" : "password"}
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                placeholder="Digite sua senha"
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  background: "#0a0a0a",
+                  border: "1px solid #333",
+                  borderRadius: "8px",
+                  color: "#fff",
+                  fontSize: "14px",
+                  outline: "none",
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() => setMostrarSenha(!mostrarSenha)}
+                style={{
+                  position: "absolute",
+                  right: "10px",
+                  top: "12px",
+                  fontSize: "12px",
+                  color: "#d4af37",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {mostrarSenha ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
           </div>
 
-          {erro ? (
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {erro && (
+            <p
+              style={{
+                color: "#ff5c5c",
+                fontSize: "13px",
+                marginBottom: "12px",
+              }}
+            >
               {erro}
-            </div>
-          ) : null}
+            </p>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-2xl bg-gradient-to-r from-[#f3d36b] via-[#d4a63a] to-[#8f6a18] px-4 py-3 text-sm font-bold text-[#06070a] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+            style={{
+              width: "100%",
+              padding: "13px",
+              background: "linear-gradient(90deg,#d4af37,#f6e27a)",
+              border: "none",
+              borderRadius: "8px",
+              color: "#000",
+              fontWeight: 700,
+              cursor: "pointer",
+              fontSize: "15px",
+            }}
           >
-            {loading ? "Entrando..." : "Entrar no SegMax"}
+            {loading ? "Entrando..." : "Entrar no sistema"}
           </button>
         </form>
+
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: "25px",
+            color: "#777",
+            fontSize: "12px",
+          }}
+        >
+          Plataforma SegMax CRM
+        </p>
       </div>
-    </main>
+    </div>
   );
 }
