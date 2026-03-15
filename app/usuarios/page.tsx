@@ -1,127 +1,113 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-
-type Permissao =
-  | "master"
-  | "diretora_tecnica"
-  | "diretora_financeira"
-  | "admin_corretora"
-  | "corretor"
-  | "operacional";
-
-type StatusUsuario = "ativo" | "suspenso" | "bloqueado";
-
-type Corretora = {
-  id: string;
-  nome_fantasia: string | null;
-  razao_social: string | null;
-};
 
 type Usuario = {
   id: string;
   nome: string | null;
   email: string | null;
+  login: string | null;
   telefone: string | null;
-  permissao: Permissao | string | null;
-  status: StatusUsuario | string | null;
-  ativo: boolean | null;
+  permissao: string | null;
+  status: string | null;
+  corretora: string | null;
   created_at?: string | null;
-  corretora_id?: string | null;
 };
 
-const permissoesOptions: { value: Permissao; label: string }[] = [
-  { value: "master", label: "Master" },
-  { value: "diretora_tecnica", label: "Diretora Técnica" },
-  { value: "diretora_financeira", label: "Diretora Financeira" },
-  { value: "admin_corretora", label: "Admin da Corretora" },
-  { value: "corretor", label: "Corretor" },
-  { value: "operacional", label: "Operacional" },
-];
+type FormState = {
+  nome: string;
+  login: string;
+  email: string;
+  senha: string;
+  telefone: string;
+  permissao: string;
+  status: string;
+  corretora: string;
+};
 
-const statusOptions: { value: StatusUsuario; label: string }[] = [
-  { value: "ativo", label: "Ativo" },
-  { value: "suspenso", label: "Suspenso" },
-  { value: "bloqueado", label: "Bloqueado" },
-];
+const FORM_INICIAL: FormState = {
+  nome: "",
+  login: "",
+  email: "",
+  senha: "",
+  telefone: "",
+  permissao: "corretor",
+  status: "ativo",
+  corretora: "Corretora SegMax",
+};
 
-function BadgeStatus({ status }: { status: string | null | undefined }) {
-  if (status === "ativo") {
-    return (
-      <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
-        Ativo
-      </span>
-    );
-  }
-
-  if (status === "suspenso") {
-    return (
-      <span className="inline-flex items-center rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-300">
-        Suspenso
-      </span>
-    );
-  }
-
-  return (
-    <span className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-300">
-      Bloqueado
-    </span>
-  );
+function formatarPermissao(permissao?: string | null) {
+  if (!permissao) return "-";
+  if (permissao === "master") return "Diretor Geral / Master";
+  if (permissao === "diretora_tecnica") return "Diretora Técnica";
+  if (permissao === "diretora_financeira") return "Diretora Financeira";
+  if (permissao === "admin_corretora") return "Admin da Corretora";
+  if (permissao === "corretor") return "Corretor";
+  return permissao;
 }
 
 export default function UsuariosPage() {
+  const router = useRouter();
+
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [corretoras, setCorretoras] = useState<Corretora[]>([]);
   const [busca, setBusca] = useState("");
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
-  const [sucesso, setSucesso] = useState("");
+  const [usuarioLogadoNome, setUsuarioLogadoNome] = useState("Usuário");
+  const [processandoId, setProcessandoId] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
-    nome: "",
-    email: "",
-    telefone: "",
-    senha: "",
-    confirmarSenha: "",
-    permissao: "corretor" as Permissao,
-    status: "ativo" as StatusUsuario,
-    corretora_id: "",
-  });
+  const [form, setForm] = useState<FormState>(FORM_INICIAL);
 
-  async function carregarDados() {
-    setCarregando(true);
-    setErro("");
+  async function carregarUsuarios() {
+    try {
+      setCarregando(true);
+      setErro("");
 
-    const [usuariosResp, corretorasResp] = await Promise.all([
-      supabase
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      const { data: usuarioAtual } = await supabase
         .from("usuarios")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("corretoras")
-        .select("id, nome_fantasia, razao_social")
-        .order("nome_fantasia", { ascending: true }),
-    ]);
+        .select("nome")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    if (usuariosResp.error) {
-      setErro(usuariosResp.error.message);
-    } else {
-      setUsuarios((usuariosResp.data as Usuario[]) || []);
+      if (usuarioAtual?.nome) {
+        setUsuarioLogadoNome(usuarioAtual.nome);
+      }
+
+      const { data, error } = await supabase
+        .from("usuarios")
+        .select("id, nome, email, login, telefone, permissao, status, corretora, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setErro(error.message);
+        return;
+      }
+
+      setUsuarios((data as Usuario[]) || []);
+    } catch (e) {
+      console.error(e);
+      setErro("Não foi possível carregar os usuários.");
+    } finally {
+      setCarregando(false);
     }
-
-    if (corretorasResp.error) {
-      setErro(corretorasResp.error.message);
-    } else {
-      setCorretoras((corretorasResp.data as Corretora[]) || []);
-    }
-
-    setCarregando(false);
   }
 
   useEffect(() => {
-    carregarDados();
+    carregarUsuarios();
   }, []);
 
   const usuariosFiltrados = useMemo(() => {
@@ -130,494 +116,514 @@ export default function UsuariosPage() {
     if (!termo) return usuarios;
 
     return usuarios.filter((u) => {
-      const nome = (u.nome || "").toLowerCase();
-      const email = (u.email || "").toLowerCase();
-      const telefone = (u.telefone || "").toLowerCase();
-      const permissao = (u.permissao || "").toLowerCase();
-      const status = (u.status || "").toLowerCase();
-
       return (
-        nome.includes(termo) ||
-        email.includes(termo) ||
-        telefone.includes(termo) ||
-        permissao.includes(termo) ||
-        status.includes(termo)
+        (u.nome || "").toLowerCase().includes(termo) ||
+        (u.email || "").toLowerCase().includes(termo) ||
+        (u.login || "").toLowerCase().includes(termo) ||
+        (u.telefone || "").toLowerCase().includes(termo) ||
+        (u.permissao || "").toLowerCase().includes(termo) ||
+        (u.status || "").toLowerCase().includes(termo) ||
+        (u.corretora || "").toLowerCase().includes(termo)
       );
     });
   }, [usuarios, busca]);
 
-  function atualizarCampo<K extends keyof typeof form>(
-    campo: K,
-    valor: (typeof form)[K]
-  ) {
+  const totalUsuarios = usuarios.length;
+  const ativos = usuarios.filter((u) => (u.status || "").toLowerCase() === "ativo").length;
+  const suspensos = usuarios.filter((u) => (u.status || "").toLowerCase() === "suspenso").length;
+  const bloqueados = usuarios.filter((u) => (u.status || "").toLowerCase() === "bloqueado").length;
+
+  function atualizarCampo<K extends keyof FormState>(campo: K, valor: FormState[K]) {
     setForm((prev) => ({
       ...prev,
       [campo]: valor,
     }));
   }
 
-  function nomeCorretoraPorId(id?: string | null) {
-    if (!id) return "Sem corretora";
-
-    const corretora = corretoras.find((c) => c.id === id);
-
-    return (
-      corretora?.nome_fantasia ||
-      corretora?.razao_social ||
-      "Corretora não encontrada"
-    );
-  }
-
   async function criarUsuario(e: React.FormEvent) {
     e.preventDefault();
+
+    setMensagem("");
     setErro("");
-    setSucesso("");
 
     if (!form.nome.trim()) {
-      setErro("Preencha o nome.");
+      setErro("Informe o nome do usuário.");
+      return;
+    }
+
+    if (!form.login.trim()) {
+      setErro("Informe o login de acesso.");
       return;
     }
 
     if (!form.email.trim()) {
-      setErro("Preencha o e-mail.");
+      setErro("Informe o e-mail.");
       return;
     }
 
-    if (!form.senha.trim()) {
-      setErro("Preencha a senha.");
+    if (!form.senha.trim() || form.senha.trim().length < 6) {
+      setErro("A senha precisa ter pelo menos 6 caracteres.");
       return;
     }
-
-    if (form.senha.length < 6) {
-      setErro("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    if (form.senha !== form.confirmarSenha) {
-      setErro("A confirmação da senha não confere.");
-      return;
-    }
-
-    setSalvando(true);
 
     try {
-      const resp = await fetch("/api/usuarios/criar", {
+      setSalvando(true);
+
+      const resposta = await fetch("/api/usuarios/criar", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          nome: form.nome,
-          email: form.email,
-          telefone: form.telefone,
-          senha: form.senha,
-          permissao: form.permissao,
-          status: form.status,
-          corretora_id: form.corretora_id || null,
-        }),
+        body: JSON.stringify(form),
       });
 
-      const data = await resp.json();
+      const resultado = await resposta.json();
 
-      if (!resp.ok) {
-        setErro(data.error || "Erro ao criar usuário.");
-        setSalvando(false);
+      if (!resposta.ok) {
+        setErro(resultado?.error || "Não foi possível criar o usuário.");
         return;
       }
 
-      setSucesso("Usuário criado com login e senha com sucesso.");
-
-      setForm({
-        nome: "",
-        email: "",
-        telefone: "",
-        senha: "",
-        confirmarSenha: "",
-        permissao: "corretor",
-        status: "ativo",
-        corretora_id: "",
-      });
-
-      await carregarDados();
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro inesperado.");
+      setMensagem("Usuário criado com sucesso.");
+      setForm(FORM_INICIAL);
+      await carregarUsuarios();
+    } catch (e) {
+      console.error(e);
+      setErro("Erro inesperado ao criar usuário.");
     } finally {
       setSalvando(false);
     }
   }
 
+  async function alterarStatusUsuario(usuarioId: string, novoStatus: "ativo" | "suspenso" | "bloqueado") {
+    try {
+      setProcessandoId(usuarioId);
+      setErro("");
+      setMensagem("");
+
+      const { error } = await supabase
+        .from("usuarios")
+        .update({ status: novoStatus })
+        .eq("id", usuarioId);
+
+      if (error) {
+        setErro(error.message);
+        return;
+      }
+
+      setMensagem(`Status do usuário alterado para ${novoStatus}.`);
+      await carregarUsuarios();
+    } catch (e) {
+      console.error(e);
+      setErro("Não foi possível alterar o status do usuário.");
+    } finally {
+      setProcessandoId(null);
+    }
+  }
+
+  async function excluirUsuario(usuarioId: string, nomeUsuario?: string | null) {
+    const confirmar = window.confirm(
+      `Tem certeza que deseja excluir o usuário ${nomeUsuario || ""}? Essa ação remove também o acesso dele ao sistema.`
+    );
+
+    if (!confirmar) return;
+
+    try {
+      setProcessandoId(usuarioId);
+      setErro("");
+      setMensagem("");
+
+      const resposta = await fetch("/api/usuarios/excluir", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: usuarioId }),
+      });
+
+      const resultado = await resposta.json();
+
+      if (!resposta.ok) {
+        setErro(resultado?.error || "Não foi possível excluir o usuário.");
+        return;
+      }
+
+      setMensagem("Usuário excluído com sucesso.");
+      await carregarUsuarios();
+    } catch (e) {
+      console.error(e);
+      setErro("Não foi possível excluir o usuário.");
+    } finally {
+      setProcessandoId(null);
+    }
+  }
+
+  async function sairSistema() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
+
   return (
-    <main className="min-h-screen bg-[#050505] text-white">
-      <div className="mx-auto w-full max-w-[1500px] px-4 py-6 md:px-6 md:py-8 xl:px-8">
-        <section className="relative overflow-hidden rounded-[30px] border border-yellow-500/20 bg-gradient-to-br from-[#0a0a0a] via-[#050505] to-[#111111] shadow-[0_0_45px_rgba(0,0,0,0.45)]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(212,175,55,0.09),transparent_22%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.03),transparent_18%)]" />
+    <div className="min-h-screen bg-[#050505] px-6 py-6 text-white md:px-8">
+      <div className="mx-auto max-w-[1450px] space-y-5">
+        <section className="rounded-[28px] border border-yellow-600/20 bg-[#0a0a0a]/95 px-6 py-7 shadow-[0_0_40px_rgba(0,0,0,0.35)] md:px-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-3 inline-flex rounded-full border border-yellow-600/20 bg-[#111111] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-yellow-500">
+                Área master
+              </div>
 
-          <div className="absolute right-0 top-0 hidden h-full w-[32%] items-center justify-center xl:flex">
-            <img
-              src="/segmax-logo.png"
-              alt="SegMax"
-              className="w-[360px] max-w-full opacity-[0.05]"
-            />
-          </div>
-
-          <div className="relative z-10 grid grid-cols-1 gap-6 p-6 md:p-8 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-end">
-            <div className="max-w-4xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-yellow-400/90">
-                SegMax CRM
-              </p>
-
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-white md:text-5xl">
+              <h1 className="text-4xl font-bold leading-tight md:text-6xl">
                 Gestão de Usuários
               </h1>
 
-              <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
-                Cadastre usuários com login e senha para acesso ao sistema.
-                Cada perfil poderá entrar na plataforma, cadastrar clientes e
-                criar cotações conforme as permissões definidas.
+              <p className="mt-4 max-w-3xl text-base leading-8 text-zinc-300 md:text-lg">
+                Cadastre, acompanhe, filtre e controle os usuários do sistema com login,
+                senha de acesso, permissões por perfil e vínculo com a corretora.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-              <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-5">
-                <p className="text-xs uppercase tracking-[0.25em] text-zinc-400">
-                  Usuários
-                </p>
-                <p className="mt-3 text-4xl font-bold text-white">
-                  {usuarios.length}
-                </p>
-              </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={carregarUsuarios}
+                className="rounded-xl border border-zinc-700 bg-[#111111] px-5 py-3 text-sm font-semibold text-white transition hover:border-yellow-500/40 hover:bg-[#151515]"
+              >
+                Atualizar
+              </button>
 
-              <div className="rounded-[26px] border border-yellow-500/20 bg-yellow-500/[0.06] p-5">
-                <p className="text-xs uppercase tracking-[0.25em] text-yellow-300/80">
-                  Identidade visual
-                </p>
-                <p className="mt-3 text-lg font-semibold leading-6 text-yellow-100">
-                  Preto, branco e dourado
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById("form-novo-usuario");
+                  el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                className="rounded-xl bg-yellow-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-yellow-400"
+              >
+                Novo usuário
+              </button>
+
+              <button
+                type="button"
+                onClick={sairSistema}
+                className="rounded-xl border border-zinc-700 bg-[#111111] px-5 py-3 text-sm font-semibold text-white transition hover:border-red-500/40 hover:bg-[#151515]"
+              >
+                Sair do sistema
+              </button>
             </div>
           </div>
         </section>
 
-        {erro ? (
-          <div className="mt-6 rounded-2xl border border-red-500/25 bg-red-950/20 px-4 py-3 text-sm text-red-200">
-            {erro}
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
+            <p className="text-sm text-zinc-400">Total de usuários</p>
+            <h3 className="mt-2 text-5xl font-bold">{totalUsuarios}</h3>
           </div>
-        ) : null}
 
-        {sucesso ? (
-          <div className="mt-6 rounded-2xl border border-emerald-500/25 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">
-            {sucesso}
+          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
+            <p className="text-sm text-yellow-500">Ativos</p>
+            <h3 className="mt-2 text-5xl font-bold text-yellow-400">{ativos}</h3>
           </div>
-        ) : null}
 
-        <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[440px_minmax(0,1fr)]">
-          <section className="rounded-[30px] border border-yellow-500/15 bg-[#0a0a0a]/95 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
+          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
+            <p className="text-sm text-zinc-400">Suspensos</p>
+            <h3 className="mt-2 text-5xl font-bold">{suspensos}</h3>
+          </div>
+
+          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
+            <p className="text-sm text-zinc-400">Bloqueados</p>
+            <h3 className="mt-2 text-5xl font-bold">{bloqueados}</h3>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
+          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
+            <p className="text-sm text-zinc-400">Usuário logado</p>
+            <h3 className="mt-2 text-3xl font-bold">{usuarioLogadoNome}</h3>
+          </div>
+
+          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
+            <div className="flex h-full items-center">
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar usuário, login, e-mail, telefone, permissão, status ou corretora..."
+                className="w-full rounded-xl border border-yellow-600/20 bg-[#050505] px-4 py-4 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-yellow-500/40"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[420px_1fr]">
+          <form
+            id="form-novo-usuario"
+            onSubmit={criarUsuario}
+            className="rounded-[28px] border border-yellow-600/20 bg-[#0a0a0a] p-6"
+          >
             <div className="mb-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.30em] text-yellow-400/90">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-yellow-500">
                 Cadastro
               </p>
-              <h2 className="mt-2 text-2xl font-bold text-white">
-                Novo usuário
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-zinc-400">
-                Defina os dados de acesso, o perfil e a corretora vinculada.
+              <h2 className="mt-3 text-4xl font-bold">Novo usuário</h2>
+              <p className="mt-3 text-sm leading-7 text-zinc-400">
+                Crie o acesso completo do usuário com login, senha, perfil e vínculo com a corretora.
               </p>
             </div>
 
-            <form onSubmit={criarUsuario} className="space-y-5">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-zinc-200">
-                  Nome
-                </label>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">Nome</label>
                 <input
                   type="text"
                   value={form.nome}
                   onChange={(e) => atualizarCampo("nome", e.target.value)}
                   placeholder="Ex.: João Silva"
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white placeholder:text-zinc-500 outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
+                  className="w-full rounded-xl border border-zinc-800 bg-[#050505] px-4 py-4 text-white outline-none placeholder:text-zinc-500 focus:border-yellow-500/40"
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-zinc-200">
-                  E-mail de acesso
-                </label>
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">Login de acesso</label>
+                <input
+                  type="text"
+                  value={form.login}
+                  onChange={(e) => atualizarCampo("login", e.target.value)}
+                  placeholder="Ex.: joao.silva"
+                  className="w-full rounded-xl border border-zinc-800 bg-[#050505] px-4 py-4 text-white outline-none placeholder:text-zinc-500 focus:border-yellow-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">E-mail</label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => atualizarCampo("email", e.target.value)}
                   placeholder="usuario@empresa.com"
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white placeholder:text-zinc-500 outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
+                  className="w-full rounded-xl border border-zinc-800 bg-[#050505] px-4 py-4 text-white outline-none placeholder:text-zinc-500 focus:border-yellow-500/40"
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-zinc-200">
-                  Telefone
-                </label>
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">Senha de acesso</label>
+                <input
+                  type="password"
+                  value={form.senha}
+                  onChange={(e) => atualizarCampo("senha", e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="w-full rounded-xl border border-zinc-800 bg-[#050505] px-4 py-4 text-white outline-none placeholder:text-zinc-500 focus:border-yellow-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">Telefone</label>
                 <input
                   type="text"
                   value={form.telefone}
                   onChange={(e) => atualizarCampo("telefone", e.target.value)}
                   placeholder="(11) 99999-9999"
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white placeholder:text-zinc-500 outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
+                  className="w-full rounded-xl border border-zinc-800 bg-[#050505] px-4 py-4 text-white outline-none placeholder:text-zinc-500 focus:border-yellow-500/40"
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-zinc-200">
-                  Corretora
-                </label>
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">Corretora</label>
+                <input
+                  type="text"
+                  value={form.corretora}
+                  onChange={(e) => atualizarCampo("corretora", e.target.value)}
+                  placeholder="Corretora SegMax"
+                  className="w-full rounded-xl border border-zinc-800 bg-[#050505] px-4 py-4 text-white outline-none placeholder:text-zinc-500 focus:border-yellow-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">Permissão</label>
                 <select
-                  value={form.corretora_id}
-                  onChange={(e) => atualizarCampo("corretora_id", e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
+                  value={form.permissao}
+                  onChange={(e) => atualizarCampo("permissao", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-[#050505] px-4 py-4 text-white outline-none focus:border-yellow-500/40"
                 >
-                  <option value="">Sem corretora</option>
-                  {corretoras.map((corretora) => (
-                    <option key={corretora.id} value={corretora.id}>
-                      {corretora.nome_fantasia ||
-                        corretora.razao_social ||
-                        "Sem nome"}
-                    </option>
-                  ))}
+                  <option value="master">Diretor Geral / Master</option>
+                  <option value="diretora_tecnica">Diretora Técnica</option>
+                  <option value="diretora_financeira">Diretora Financeira</option>
+                  <option value="admin_corretora">Admin da Corretora</option>
+                  <option value="corretor">Corretor</option>
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-200">
-                    Permissão
-                  </label>
-                  <select
-                    value={form.permissao}
-                    onChange={(e) =>
-                      atualizarCampo("permissao", e.target.value as Permissao)
-                    }
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
-                  >
-                    {permissoesOptions.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-200">
-                    Status
-                  </label>
-                  <select
-                    value={form.status}
-                    onChange={(e) =>
-                      atualizarCampo("status", e.target.value as StatusUsuario)
-                    }
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
-                  >
-                    {statusOptions.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => atualizarCampo("status", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-[#050505] px-4 py-4 text-white outline-none focus:border-yellow-500/40"
+                >
+                  <option value="ativo">Ativo</option>
+                  <option value="suspenso">Suspenso</option>
+                  <option value="bloqueado">Bloqueado</option>
+                </select>
               </div>
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-200">
-                    Senha inicial
-                  </label>
-                  <input
-                    type="password"
-                    value={form.senha}
-                    onChange={(e) => atualizarCampo("senha", e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white placeholder:text-zinc-500 outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
-                  />
+              {mensagem ? (
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                  {mensagem}
                 </div>
+              ) : null}
 
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-200">
-                    Confirmar senha
-                  </label>
-                  <input
-                    type="password"
-                    value={form.confirmarSenha}
-                    onChange={(e) =>
-                      atualizarCampo("confirmarSenha", e.target.value)
-                    }
-                    placeholder="Repita a senha"
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white placeholder:text-zinc-500 outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
-                  />
+              {erro ? (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {erro}
                 </div>
-              </div>
+              ) : null}
 
               <button
                 type="submit"
                 disabled={salvando}
-                className="flex h-12 w-full items-center justify-center rounded-2xl border border-yellow-500/40 bg-gradient-to-r from-yellow-500 to-yellow-400 px-4 text-sm font-bold text-black transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-xl bg-yellow-500 px-5 py-4 text-base font-semibold text-black transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {salvando ? "Criando usuário..." : "Criar usuário com acesso"}
+                {salvando ? "Criando usuário..." : "Criar usuário"}
               </button>
-            </form>
-          </section>
+            </div>
+          </form>
 
-          <section className="rounded-[30px] border border-yellow-500/15 bg-[#0a0a0a]/95 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
-            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.30em] text-yellow-400/90">
-                  Controle
-                </p>
-                <h2 className="mt-2 text-2xl font-bold text-white">
-                  Usuários cadastrados
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Visualize os acessos criados e filtre rapidamente por nome,
-                  e-mail, status ou permissão.
-                </p>
-              </div>
-
-              <div className="w-full lg:w-[320px]">
-                <label className="mb-2 block text-sm font-medium text-zinc-200">
-                  Buscar usuário
-                </label>
-                <input
-                  type="text"
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Nome, e-mail, status..."
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#111111]/95 px-4 text-white placeholder:text-zinc-500 outline-none transition focus:border-yellow-500/60 focus:bg-[#151515]"
-                />
-              </div>
+          <section className="rounded-[28px] border border-yellow-600/20 bg-[#0a0a0a] p-6">
+            <div className="mb-6">
+              <h2 className="text-4xl font-bold">Lista de usuários</h2>
+              <p className="mt-3 text-sm leading-7 text-zinc-400">
+                Visualize os usuários cadastrados, altere status, edite dados e remova totalmente o acesso quando necessário.
+              </p>
             </div>
 
-            {carregando ? (
-              <div className="rounded-2xl border border-white/10 bg-[#111111] px-4 py-10 text-center text-zinc-400">
-                Carregando usuários...
-              </div>
-            ) : usuariosFiltrados.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-[#111111] px-4 py-10 text-center text-zinc-400">
-                Nenhum usuário encontrado.
-              </div>
-            ) : (
-              <>
-                <div className="hidden overflow-hidden rounded-[24px] border border-white/10 2xl:block">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead className="bg-[#121212]">
-                        <tr className="border-b border-white/10">
-                          <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">
-                            Nome
-                          </th>
-                          <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">
-                            E-mail
-                          </th>
-                          <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">
-                            Telefone
-                          </th>
-                          <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">
-                            Permissão
-                          </th>
-                          <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">
-                            Status
-                          </th>
-                          <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">
-                            Corretora
-                          </th>
-                        </tr>
-                      </thead>
+            <div className="overflow-x-auto">
+              <table className="min-w-[1300px] w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-yellow-600/10 text-left text-xs uppercase tracking-[0.25em] text-zinc-400">
+                    <th className="px-4 py-4">Nome</th>
+                    <th className="px-4 py-4">Login</th>
+                    <th className="px-4 py-4">E-mail</th>
+                    <th className="px-4 py-4">Telefone</th>
+                    <th className="px-4 py-4">Permissão</th>
+                    <th className="px-4 py-4">Status</th>
+                    <th className="px-4 py-4">Corretora</th>
+                    <th className="px-4 py-4">Ações</th>
+                  </tr>
+                </thead>
 
-                      <tbody>
-                        {usuariosFiltrados.map((usuario, index) => (
-                          <tr
-                            key={usuario.id}
-                            className={`border-b border-white/5 transition hover:bg-white/[0.03] ${
-                              index % 2 === 0 ? "bg-[#0d0d0d]" : "bg-[#090909]"
-                            }`}
+                <tbody>
+                  {carregando ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-zinc-400">
+                        Carregando usuários...
+                      </td>
+                    </tr>
+                  ) : usuariosFiltrados.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-zinc-400">
+                        Nenhum usuário encontrado.
+                      </td>
+                    </tr>
+                  ) : (
+                    usuariosFiltrados.map((usuario) => (
+                      <tr
+                        key={usuario.id}
+                        className="border-b border-yellow-600/10 transition hover:bg-white/[0.02]"
+                      >
+                        <td className="px-4 py-5 font-semibold text-white">
+                          {usuario.nome || "-"}
+                        </td>
+
+                        <td className="px-4 py-5 text-zinc-300">
+                          {usuario.login || "-"}
+                        </td>
+
+                        <td className="px-4 py-5 text-zinc-300">
+                          {usuario.email || "-"}
+                        </td>
+
+                        <td className="px-4 py-5 text-zinc-300">
+                          {usuario.telefone || "-"}
+                        </td>
+
+                        <td className="px-4 py-5 text-zinc-300">
+                          {formatarPermissao(usuario.permissao)}
+                        </td>
+
+                        <td className="px-4 py-5">
+                          <span
+                            className={[
+                              "inline-flex rounded-full px-3 py-1 text-xs font-semibold",
+                              (usuario.status || "").toLowerCase() === "ativo"
+                                ? "bg-yellow-500/10 text-yellow-400 ring-1 ring-yellow-500/20"
+                                : (usuario.status || "").toLowerCase() === "suspenso"
+                                ? "bg-orange-500/10 text-orange-300 ring-1 ring-orange-500/20"
+                                : "bg-red-500/10 text-red-300 ring-1 ring-red-500/20",
+                            ].join(" ")}
                           >
-                            <td className="px-5 py-4 text-sm font-medium text-white">
-                              {usuario.nome || "-"}
-                            </td>
-                            <td className="px-5 py-4 text-sm text-zinc-300">
-                              {usuario.email || "-"}
-                            </td>
-                            <td className="px-5 py-4 text-sm text-zinc-300">
-                              {usuario.telefone || "-"}
-                            </td>
-                            <td className="px-5 py-4 text-sm text-zinc-300">
-                              {usuario.permissao || "-"}
-                            </td>
-                            <td className="px-5 py-4 text-sm text-zinc-300">
-                              <BadgeStatus status={usuario.status} />
-                            </td>
-                            <td className="px-5 py-4 text-sm text-zinc-300">
-                              {nomeCorretoraPorId(usuario.corretora_id)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                            {usuario.status || "-"}
+                          </span>
+                        </td>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:hidden">
-                  {usuariosFiltrados.map((usuario) => (
-                    <div
-                      key={usuario.id}
-                      className="rounded-[24px] border border-white/10 bg-[#111111] p-5"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h3 className="text-base font-bold text-white">
-                            {usuario.nome || "-"}
-                          </h3>
-                          <p className="mt-1 text-sm text-zinc-400">
-                            {usuario.email || "-"}
-                          </p>
-                        </div>
+                        <td className="px-4 py-5 text-zinc-300">
+                          {usuario.corretora || "Sem corretora"}
+                        </td>
 
-                        <BadgeStatus status={usuario.status} />
-                      </div>
+                        <td className="px-4 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              href={`/usuarios/${usuario.id}/editar`}
+                              className="rounded-lg border border-yellow-600/20 bg-yellow-500/10 px-3 py-2 text-xs font-semibold text-yellow-400 transition hover:bg-yellow-500/15"
+                            >
+                              Editar
+                            </Link>
 
-                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-yellow-400">
-                            Telefone
-                          </p>
-                          <p className="mt-1 text-sm text-zinc-300">
-                            {usuario.telefone || "-"}
-                          </p>
-                        </div>
+                            <button
+                              type="button"
+                              disabled={processandoId === usuario.id}
+                              onClick={() => alterarStatusUsuario(usuario.id, "suspenso")}
+                              className="rounded-lg border border-zinc-700 bg-[#111111] px-3 py-2 text-xs font-semibold text-white transition hover:border-orange-500/30 hover:bg-[#151515] disabled:opacity-60"
+                            >
+                              Suspender
+                            </button>
 
-                        <div>
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-yellow-400">
-                            Permissão
-                          </p>
-                          <p className="mt-1 text-sm text-zinc-300">
-                            {usuario.permissao || "-"}
-                          </p>
-                        </div>
+                            <button
+                              type="button"
+                              disabled={processandoId === usuario.id}
+                              onClick={() => alterarStatusUsuario(usuario.id, "bloqueado")}
+                              className="rounded-lg border border-zinc-700 bg-[#111111] px-3 py-2 text-xs font-semibold text-white transition hover:border-red-500/30 hover:bg-[#151515] disabled:opacity-60"
+                            >
+                              Bloquear
+                            </button>
 
-                        <div className="sm:col-span-2">
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-yellow-400">
-                            Corretora
-                          </p>
-                          <p className="mt-1 text-sm text-zinc-300">
-                            {nomeCorretoraPorId(usuario.corretora_id)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+                            <button
+                              type="button"
+                              disabled={processandoId === usuario.id}
+                              onClick={() => alterarStatusUsuario(usuario.id, "ativo")}
+                              className="rounded-lg border border-zinc-700 bg-[#111111] px-3 py-2 text-xs font-semibold text-white transition hover:border-emerald-500/30 hover:bg-[#151515] disabled:opacity-60"
+                            >
+                              Reativar
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={processandoId === usuario.id}
+                              onClick={() => excluirUsuario(usuario.id, usuario.nome)}
+                              className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/15 disabled:opacity-60"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </section>
-        </div>
+        </section>
       </div>
-    </main>
+    </div>
   );
 }

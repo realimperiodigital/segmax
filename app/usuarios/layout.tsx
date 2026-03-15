@@ -1,12 +1,15 @@
-import type { ReactNode } from "react";
-
 export default function UsuariosLayout({
   children,
 }: {
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
+    <div
+      style={{
+        position: "relative",
+        minHeight: "100vh",
+      }}
+    >
       {children}
     </div>
   );

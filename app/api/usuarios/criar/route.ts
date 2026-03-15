@@ -1,161 +1,124 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@supabase/supabase-js";
 
-type Permissao =
-  | "master"
-  | "diretora_tecnica"
-  | "diretora_financeira"
-  | "admin_corretora"
-  | "corretor"
-  | "operacional";
-
-const permissoesValidas: Permissao[] = [
-  "master",
-  "diretora_tecnica",
-  "diretora_financeira",
-  "admin_corretora",
-  "corretor",
-  "operacional",
-];
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.SUPABASE_SERVICE_ROLE_KEY as string,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+);
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const nome = String(body.nome || "").trim();
-    const email = String(body.email || "").trim().toLowerCase();
-    const telefone = String(body.telefone || "").trim();
-    const senha = String(body.senha || "").trim();
-    const permissao = String(body.permissao || "").trim() as Permissao;
-    const status = String(body.status || "ativo").trim();
-    const corretora_id =
-      body.corretora_id && String(body.corretora_id).trim() !== ""
-        ? String(body.corretora_id).trim()
-        : null;
+    const nome = String(body?.nome || "").trim();
+    const login = String(body?.login || "").trim();
+    const email = String(body?.email || "").trim().toLowerCase();
+    const senha = String(body?.senha || "").trim();
+    const telefone = String(body?.telefone || "").trim();
+    const permissao = String(body?.permissao || "corretor").trim();
+    const status = String(body?.status || "ativo").trim();
+    const corretora = String(body?.corretora || "Corretora SegMax").trim();
 
     if (!nome) {
-      return NextResponse.json(
-        { error: "Nome é obrigatório." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Nome é obrigatório." }, { status: 400 });
+    }
+
+    if (!login) {
+      return NextResponse.json({ error: "Login é obrigatório." }, { status: 400 });
     }
 
     if (!email) {
-      return NextResponse.json(
-        { error: "E-mail é obrigatório." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "E-mail é obrigatório." }, { status: 400 });
     }
 
     if (!senha || senha.length < 6) {
       return NextResponse.json(
-        { error: "A senha deve ter pelo menos 6 caracteres." },
+        { error: "A senha precisa ter pelo menos 6 caracteres." },
         { status: 400 }
       );
     }
 
-    if (!permissoesValidas.includes(permissao)) {
-      return NextResponse.json(
-        { error: "Permissão inválida." },
-        { status: 400 }
-      );
-    }
-
-    if (!["ativo", "suspenso", "bloqueado"].includes(status)) {
-      return NextResponse.json(
-        { error: "Status inválido." },
-        { status: 400 }
-      );
-    }
-
-    const { data: emailExistenteAuth } =
-      await supabaseAdmin.auth.admin.listUsers();
-
-    const jaExisteNoAuth = emailExistenteAuth.users.some(
-      (u) => u.email?.toLowerCase() === email
-    );
-
-    if (jaExisteNoAuth) {
-      return NextResponse.json(
-        { error: "Já existe um usuário no Auth com este e-mail." },
-        { status: 400 }
-      );
-    }
-
-    const { data: usuarioExistenteTabela, error: erroUsuarioExistente } =
-      await supabaseAdmin
-        .from("usuarios")
-        .select("id, email")
-        .eq("email", email)
-        .maybeSingle();
-
-    if (erroUsuarioExistente) {
-      return NextResponse.json(
-        { error: erroUsuarioExistente.message },
-        { status: 400 }
-      );
-    }
-
-    if (usuarioExistenteTabela) {
-      return NextResponse.json(
-        { error: "Já existe um usuário na tabela usuarios com este e-mail." },
-        { status: 400 }
-      );
-    }
-
-    const { data: authCriado, error: authError } =
-      await supabaseAdmin.auth.admin.createUser({
-        email,
-        password: senha,
-        email_confirm: true,
-        user_metadata: {
-          nome,
-          permissao,
-        },
-      });
-
-    if (authError || !authCriado.user) {
-      return NextResponse.json(
-        { error: authError?.message || "Erro ao criar usuário no Auth." },
-        { status: 400 }
-      );
-    }
-
-    const authUserId = authCriado.user.id;
-
-    const { data: usuarioCriado, error: insertError } = await supabaseAdmin
+    const { data: loginExistente, error: erroLoginExistente } = await supabaseAdmin
       .from("usuarios")
-      .insert({
-        id: authUserId,
+      .select("id")
+      .eq("login", login)
+      .maybeSingle();
+
+    if (erroLoginExistente) {
+      return NextResponse.json({ error: erroLoginExistente.message }, { status: 400 });
+    }
+
+    if (loginExistente) {
+      return NextResponse.json({ error: "Este login já está em uso." }, { status: 400 });
+    }
+
+    const { data: emailExistente, error: erroEmailExistente } = await supabaseAdmin
+      .from("usuarios")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (erroEmailExistente) {
+      return NextResponse.json({ error: erroEmailExistente.message }, { status: 400 });
+    }
+
+    if (emailExistente) {
+      return NextResponse.json({ error: "Este e-mail já está cadastrado." }, { status: 400 });
+    }
+
+    const { data: criadoAuth, error: erroAuth } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: senha,
+      email_confirm: true,
+      user_metadata: {
         nome,
-        email,
-        telefone: telefone || null,
+        login,
         permissao,
-        status,
-        ativo: status === "ativo",
-        corretora_id,
-      })
-      .select()
-      .single();
+        corretora,
+      },
+    });
 
-    if (insertError) {
-      await supabaseAdmin.auth.admin.deleteUser(authUserId);
-
+    if (erroAuth || !criadoAuth?.user) {
       return NextResponse.json(
-        { error: insertError.message },
+        { error: erroAuth?.message || "Não foi possível criar o acesso no Auth." },
         { status: 400 }
       );
+    }
+
+    const authUserId = criadoAuth.user.id;
+
+    const { error: erroUsuario } = await supabaseAdmin.from("usuarios").insert({
+      id: authUserId,
+      nome,
+      login,
+      email,
+      telefone: telefone || null,
+      permissao,
+      status,
+      corretora,
+    });
+
+    if (erroUsuario) {
+      await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      return NextResponse.json({ error: erroUsuario.message }, { status: 400 });
     }
 
     return NextResponse.json({
-      success: true,
+      ok: true,
       message: "Usuário criado com sucesso.",
-      usuario: usuarioCriado,
+      user_id: authUserId,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Erro interno ao criar usuário.";
-
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Erro ao criar usuário:", error);
+    return NextResponse.json(
+      { error: "Erro interno ao criar usuário." },
+      { status: 500 }
+    );
   }
 }
