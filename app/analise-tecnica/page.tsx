@@ -1,670 +1,561 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Activity,
   AlertTriangle,
-  Building2,
+  ArrowRight,
   CheckCircle2,
-  ChevronRight,
-  ClipboardList,
-  FileBarChart2,
+  ClipboardCheck,
+  Eye,
   FileSearch,
-  History,
-  LayoutDashboard,
-  ShieldAlert,
-  UserCog,
-  Users,
-  LogOut,
+  Filter,
+  Plus,
+  Search,
+  ShieldCheck,
+  TriangleAlert,
 } from "lucide-react";
 
+import SegmaxShell, { SegmaxMenuItem } from "@/components/segmaxshell";
+
 type StatusAnalise =
-  | "Pendente"
-  | "Em andamento"
+  | "Nova"
+  | "Em análise"
   | "Parecer emitido"
-  | "Crítico";
+  | "Aguardando ajuste"
+  | "Concluída";
 
-type Prioridade = "Alta" | "Média" | "Baixa";
+type NivelRisco = "Baixo" | "Médio" | "Alto" | "Crítico";
 
-type FilaAnalise = {
-  id: number;
+type AnaliseTecnica = {
+  id: string;
   cliente: string;
   corretora: string;
-  seguro: string;
+  seguradora: string;
+  ramo: string;
+  analista: string;
   status: StatusAnalise;
-  prioridade: Prioridade;
+  risco: NivelRisco;
+  atualizadoEm: string;
 };
 
-type ParecerRecente = {
-  id: number;
-  cliente: string;
-  corretora: string;
-  risco: "Baixo" | "Médio" | "Alto" | "Crítico";
-  data: string;
-  status: string;
-};
-
-type Pendencia = {
-  id: number;
-  titulo: string;
-  descricao: string;
-  nivel: "atenção" | "crítico" | "ok";
-};
-
-const cardsResumo = [
-  {
-    titulo: "Análises pendentes",
-    valor: "18",
-    detalhe: "Aguardando início técnico",
-    icon: ClipboardList,
-  },
-  {
-    titulo: "Em andamento",
-    valor: "9",
-    detalhe: "Processos em avaliação",
-    icon: Activity,
-  },
-  {
-    titulo: "Pareceres hoje",
-    valor: "6",
-    detalhe: "Emitidos nas últimas horas",
-    icon: CheckCircle2,
-  },
-  {
-    titulo: "Cotações em revisão",
-    valor: "11",
-    detalhe: "Dependem do parecer técnico",
-    icon: FileSearch,
-  },
-  {
-    titulo: "Clientes de alto risco",
-    valor: "5",
-    detalhe: "Exigem atenção imediata",
-    icon: ShieldAlert,
-  },
-  {
-    titulo: "Corretoras ativas",
-    valor: "14",
-    detalhe: "Com operação técnica aberta",
-    icon: Building2,
-  },
+const menuItems: SegmaxMenuItem[] = [
+  { label: "Centro de Controle", href: "/dashboard", exact: true },
+  { label: "Corretoras", href: "/corretoras" },
+  { label: "Usuários", href: "/usuarios" },
+  { label: "Clientes", href: "/clientes" },
+  { label: "Seguradoras", href: "/seguradoras" },
+  { label: "Cotações", href: "/cotacoes" },
+  { label: "Análise Técnica", href: "/analise-tecnica" },
+  { label: "Financeiro", href: "/financeiro" },
 ];
 
-const filaAnalises: FilaAnalise[] = [
+const analisesBase: AnaliseTecnica[] = [
   {
-    id: 1,
-    cliente: "Metalúrgica Forte Vale",
-    corretora: "Seguros Prime Broker",
-    seguro: "Patrimonial",
-    status: "Pendente",
-    prioridade: "Alta",
-  },
-  {
-    id: 2,
-    cliente: "Centro Logístico União",
-    corretora: "Alpha Corretora",
-    seguro: "Empresarial",
-    status: "Em andamento",
-    prioridade: "Alta",
-  },
-  {
-    id: 3,
-    cliente: "Rede Super Mais",
-    corretora: "Protege Brasil",
-    seguro: "Patrimonial",
-    status: "Parecer emitido",
-    prioridade: "Média",
-  },
-  {
-    id: 4,
-    cliente: "Indústria Nova Era",
-    corretora: "Fortis Seguros",
-    seguro: "Riscos Operacionais",
-    status: "Crítico",
-    prioridade: "Alta",
-  },
-  {
-    id: 5,
-    cliente: "Atacadista Horizonte",
-    corretora: "Atlas Corretora",
-    seguro: "Patrimonial",
-    status: "Em andamento",
-    prioridade: "Baixa",
-  },
-];
-
-const pareceresRecentes: ParecerRecente[] = [
-  {
-    id: 1,
-    cliente: "Grupo Monte Real",
-    corretora: "Seguros Prime Broker",
+    id: "1",
+    cliente: "Grupo Alpha Logística",
+    corretora: "Prime Broker Seguros",
+    seguradora: "Porto Seguro",
+    ramo: "Patrimonial Empresarial",
+    analista: "Ana Paula",
+    status: "Em análise",
     risco: "Médio",
-    data: "15/03/2026 08:30",
-    status: "Emitido",
+    atualizadoEm: "16/03/2026 08:10",
   },
   {
-    id: 2,
-    cliente: "Transportadora Sol Nascente",
+    id: "2",
+    cliente: "Metalúrgica Horizonte",
     corretora: "Atlas Corretora",
+    seguradora: "Tokio Marine",
+    ramo: "Patrimonial Industrial",
+    analista: "Ana Paula",
+    status: "Nova",
     risco: "Alto",
-    data: "15/03/2026 09:10",
-    status: "Em revisão",
+    atualizadoEm: "16/03/2026 07:42",
   },
   {
-    id: 3,
-    cliente: "Polo Industrial Delta",
-    corretora: "Fortis Seguros",
+    id: "3",
+    cliente: "Rede Nova Visão",
+    corretora: "Alpha Consult",
+    seguradora: "Allianz",
+    ramo: "Patrimonial Comercial",
+    analista: "Ana Paula",
+    status: "Parecer emitido",
+    risco: "Baixo",
+    atualizadoEm: "15/03/2026 18:25",
+  },
+  {
+    id: "4",
+    cliente: "Construtora Vale Forte",
+    corretora: "Prime Broker Seguros",
+    seguradora: "Mapfre",
+    ramo: "Patrimonial Construção",
+    analista: "Ana Paula",
+    status: "Aguardando ajuste",
     risco: "Crítico",
-    data: "15/03/2026 10:20",
-    status: "Prioritário",
+    atualizadoEm: "15/03/2026 16:50",
+  },
+  {
+    id: "5",
+    cliente: "Centro Log SP",
+    corretora: "Fortis Risk",
+    seguradora: "Porto Seguro",
+    ramo: "Patrimonial Logístico",
+    analista: "Ana Paula",
+    status: "Concluída",
+    risco: "Médio",
+    atualizadoEm: "14/03/2026 14:20",
   },
 ];
 
-const pendenciasTecnicas: Pendencia[] = [
-  {
-    id: 1,
-    titulo: "Documentação incompleta",
-    descricao: "3 clientes sem laudo complementar anexado.",
-    nivel: "atenção",
-  },
-  {
-    id: 2,
-    titulo: "Risco crítico identificado",
-    descricao: "1 operação patrimonial com vulnerabilidade elevada.",
-    nivel: "crítico",
-  },
-  {
-    id: 3,
-    titulo: "Retorno da corretora pendente",
-    descricao: "4 propostas aguardando resposta para continuidade.",
-    nivel: "atenção",
-  },
-  {
-    id: 4,
-    titulo: "Fluxo técnico estável",
-    descricao: "Pareceres emitidos dentro do prazo em 82% dos casos.",
-    nivel: "ok",
-  },
-];
-
-const menuItems = [
-  {
-    label: "Dashboard Técnico",
-    href: "/analise-tecnica",
-    icon: LayoutDashboard,
-    active: true,
-  },
-  {
-    label: "Corretoras",
-    href: "/corretoras",
-    icon: Building2,
-    active: false,
-  },
-  {
-    label: "Usuários",
-    href: "/usuarios",
-    icon: UserCog,
-    active: false,
-  },
-  {
-    label: "Clientes",
-    href: "/clientes",
-    icon: Users,
-    active: false,
-  },
-  {
-    label: "Nova Análise",
-    href: "/analise-tecnica/nova",
-    icon: ClipboardList,
-    active: false,
-  },
-  {
-    label: "Motor de Risco",
-    href: "/analise-tecnica/motor-risco",
-    icon: ShieldAlert,
-    active: false,
-  },
-  {
-    label: "Pareceres Técnicos",
-    href: "/analise-tecnica/pareceres",
-    icon: FileSearch,
-    active: false,
-  },
-  {
-    label: "Cotações em Análise",
-    href: "/analise-tecnica/cotacoes",
-    icon: Activity,
-    active: false,
-  },
-  {
-    label: "Relatórios Técnicos",
-    href: "/analise-tecnica/relatorios",
-    icon: FileBarChart2,
-    active: false,
-  },
-  {
-    label: "Histórico",
-    href: "/analise-tecnica/historico",
-    icon: History,
-    active: false,
-  },
-];
-
-function badgeStatusColor(status: StatusAnalise) {
-  switch (status) {
-    case "Pendente":
-      return "bg-yellow-500/15 text-yellow-300 border-yellow-500/30";
-    case "Em andamento":
-      return "bg-blue-500/15 text-blue-300 border-blue-500/30";
-    case "Parecer emitido":
-      return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
-    case "Crítico":
-      return "bg-red-500/15 text-red-300 border-red-500/30";
-    default:
-      return "bg-white/10 text-white border-white/10";
-  }
-}
-
-function badgePrioridadeColor(prioridade: Prioridade) {
-  switch (prioridade) {
-    case "Alta":
-      return "bg-red-500/15 text-red-300 border-red-500/30";
-    case "Média":
-      return "bg-yellow-500/15 text-yellow-300 border-yellow-500/30";
-    case "Baixa":
-      return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
-    default:
-      return "bg-white/10 text-white border-white/10";
-  }
-}
-
-function badgeRiscoColor(risco: ParecerRecente["risco"]) {
-  switch (risco) {
-    case "Baixo":
-      return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
-    case "Médio":
-      return "bg-yellow-500/15 text-yellow-300 border-yellow-500/30";
-    case "Alto":
-      return "bg-orange-500/15 text-orange-300 border-orange-500/30";
-    case "Crítico":
-      return "bg-red-500/15 text-red-300 border-red-500/30";
-    default:
-      return "bg-white/10 text-white border-white/10";
-  }
-}
-
-function pendenciaColor(nivel: Pendencia["nivel"]) {
-  switch (nivel) {
-    case "crítico":
-      return "border-red-500/30 bg-red-500/10";
-    case "atenção":
-      return "border-yellow-500/30 bg-yellow-500/10";
-    case "ok":
-      return "border-emerald-500/30 bg-emerald-500/10";
-    default:
-      return "border-white/10 bg-white/5";
-  }
-}
-
-export default function AnaliseTecnicaDashboardPage() {
+function SectionCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-80 border-r border-[#C8A44D]/20 bg-black/90 xl:flex xl:flex-col">
-          <div className="border-b border-[#C8A44D]/15 px-6 py-6">
-            <div className="mb-3 h-12 w-12 rounded-2xl border border-[#C8A44D]/30 bg-gradient-to-br from-[#C8A44D]/25 to-transparent" />
-            <h1 className="text-2xl font-semibold tracking-wide text-[#E7C46A]">
-              SegMax
-            </h1>
-            <p className="mt-1 text-sm text-zinc-400">
-              Central técnica da Ana Paula
-            </p>
-          </div>
+    <section
+      className={[
+        "rounded-[28px] border border-[#d4af37]/14 bg-black/45 p-6 shadow-[0_0_30px_rgba(0,0,0,0.28)] backdrop-blur-sm",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </section>
+  );
+}
 
-          <nav className="flex-1 space-y-2 px-4 py-5">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
+function ActionButton({
+  href,
+  label,
+  primary = false,
+  icon,
+}: {
+  href: string;
+  label: string;
+  primary?: boolean;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={[
+        "inline-flex items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold transition-all duration-200",
+        primary
+          ? "border-[#d4af37] bg-[#d4af37] text-black hover:brightness-110"
+          : "border-[#d4af37]/25 bg-black/30 text-white hover:border-[#d4af37]/40 hover:bg-[#d4af37]/8",
+      ].join(" ")}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+}
 
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`group flex items-center justify-between rounded-2xl border px-4 py-3 transition-all ${
-                    item.active
-                      ? "border-[#C8A44D]/40 bg-[#C8A44D]/12 text-[#F3D585]"
-                      : "border-white/5 bg-white/[0.02] text-zinc-300 hover:border-[#C8A44D]/20 hover:bg-[#C8A44D]/8 hover:text-white"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon size={18} />
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className="opacity-40 transition group-hover:opacity-100"
-                  />
-                </Link>
-              );
-            })}
-          </nav>
+function StatusBadge({ status }: { status: StatusAnalise }) {
+  const styles: Record<StatusAnalise, string> = {
+    Nova: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+    "Em análise": "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    "Parecer emitido": "border-purple-500/30 bg-purple-500/10 text-purple-300",
+    "Aguardando ajuste": "border-red-500/30 bg-red-500/10 text-red-300",
+    Concluída: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  };
 
-          <div className="border-t border-[#C8A44D]/15 p-4">
-            <Link
-              href="/login"
-              className="flex items-center justify-between rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-red-300 transition hover:bg-red-500/15"
-            >
-              <div className="flex items-center gap-3">
-                <LogOut size={18} />
-                <span className="text-sm font-medium">Sair</span>
-              </div>
-              <ChevronRight size={16} />
-            </Link>
-          </div>
-        </aside>
+  return (
+    <span
+      className={[
+        "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
+        styles[status],
+      ].join(" ")}
+    >
+      {status}
+    </span>
+  );
+}
 
-        <main className="flex-1">
-          <header className="border-b border-[#C8A44D]/15 bg-gradient-to-r from-black via-[#0B0B0B] to-black px-5 py-5 md:px-8">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#C8A44D]">
-                  Área Técnica
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold md:text-3xl">
-                  Dashboard da Ana Paula
-                </h2>
-                <p className="mt-2 max-w-3xl text-sm text-zinc-400 md:text-base">
-                  Controle técnico completo das análises, pareceres, clientes
-                  críticos e acompanhamento operacional do SegMax.
-                </p>
-              </div>
+function RiscoBadge({ risco }: { risco: NivelRisco }) {
+  const styles: Record<NivelRisco, string> = {
+    Baixo: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    Médio: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    Alto: "border-orange-500/30 bg-orange-500/10 text-orange-300",
+    Crítico: "border-red-500/30 bg-red-500/10 text-red-300",
+  };
 
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/analise-tecnica/nova"
-                  className="rounded-2xl border border-[#C8A44D]/40 bg-[#C8A44D] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
-                >
-                  Nova análise
-                </Link>
-                <Link
-                  href="/analise-tecnica/motor-risco"
-                  className="rounded-2xl border border-[#C8A44D]/25 bg-transparent px-5 py-3 text-sm font-semibold text-[#F3D585] transition hover:bg-[#C8A44D]/10"
-                >
-                  Abrir motor de risco
-                </Link>
-              </div>
+  return (
+    <span
+      className={[
+        "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
+        styles[risco],
+      ].join(" ")}
+    >
+      {risco}
+    </span>
+  );
+}
+
+export default function AnaliseTecnicaPage() {
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<"Todos" | StatusAnalise>("Todos");
+
+  const analisesFiltradas = useMemo(() => {
+    return analisesBase.filter((item) => {
+      const termo = busca.trim().toLowerCase();
+
+      const bateBusca =
+        termo.length === 0 ||
+        item.cliente.toLowerCase().includes(termo) ||
+        item.corretora.toLowerCase().includes(termo) ||
+        item.seguradora.toLowerCase().includes(termo) ||
+        item.ramo.toLowerCase().includes(termo);
+
+      const bateStatus = filtroStatus === "Todos" || item.status === filtroStatus;
+
+      return bateBusca && bateStatus;
+    });
+  }, [busca, filtroStatus]);
+
+  const totalAnalises = analisesBase.length;
+  const emAnalise = analisesBase.filter((item) => item.status === "Em análise").length;
+  const parecerEmitido = analisesBase.filter((item) => item.status === "Parecer emitido").length;
+  const riscoCritico = analisesBase.filter((item) => item.risco === "Crítico").length;
+
+  return (
+    <SegmaxShell
+      title="Análise técnica"
+      subtitle="Gerencie a fila técnica da operação, priorize riscos sensíveis e acompanhe pareceres com visão estruturada e profissional."
+      badge="Núcleo técnico SegMax"
+      username="Ana Paula"
+      userrole="Diretora Técnica"
+      menuitems={menuItems}
+      actions={
+        <>
+          <ActionButton
+            href="/cotacoes/nova"
+            label="Nova demanda"
+            primary
+            icon={<Plus size={18} />}
+          />
+          <ActionButton
+            href="/dashboard"
+            label="Voltar ao painel"
+            icon={<ArrowRight size={18} />}
+          />
+        </>
+      }
+    >
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-4">
+        <SectionCard>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-zinc-300">Análises na base</p>
+              <h3 className="mt-4 text-5xl font-semibold leading-none text-white">
+                {totalAnalises}
+              </h3>
+              <p className="mt-4 text-sm leading-6 text-zinc-400">
+                Volume técnico em acompanhamento.
+              </p>
             </div>
-          </header>
 
-          <section className="px-5 py-6 md:px-8">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {cardsResumo.map((card) => {
-                const Icon = card.icon;
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#d4af37]/20 bg-[#d4af37]/8 text-[#d4af37]">
+              <ClipboardCheck size={24} />
+            </div>
+          </div>
+        </SectionCard>
 
-                return (
-                  <div
-                    key={card.titulo}
-                    className="rounded-3xl border border-[#C8A44D]/15 bg-gradient-to-br from-zinc-900 to-black p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
-                  >
-                    <div className="flex items-start justify-between gap-4">
+        <SectionCard>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-zinc-300">Em análise</p>
+              <h3 className="mt-4 text-5xl font-semibold leading-none text-white">
+                {emAnalise}
+              </h3>
+              <p className="mt-4 text-sm leading-6 text-zinc-400">
+                Processos em avaliação ativa.
+              </p>
+            </div>
+
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
+              <FileSearch size={24} />
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-zinc-300">Parecer emitido</p>
+              <h3 className="mt-4 text-5xl font-semibold leading-none text-white">
+                {parecerEmitido}
+              </h3>
+              <p className="mt-4 text-sm leading-6 text-zinc-400">
+                Demandas prontas para avanço.
+              </p>
+            </div>
+
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+              <CheckCircle2 size={24} />
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-zinc-300">Risco crítico</p>
+              <h3 className="mt-4 text-5xl font-semibold leading-none text-white">
+                {riscoCritico}
+              </h3>
+              <p className="mt-4 text-sm leading-6 text-zinc-400">
+                Casos que exigem atenção imediata.
+              </p>
+            </div>
+
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 text-red-300">
+              <TriangleAlert size={24} />
+            </div>
+          </div>
+        </SectionCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.65fr_0.95fr]">
+        <SectionCard>
+          <div className="flex flex-col gap-5 border-b border-white/8 pb-6 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
+                Fila técnica de análises
+              </h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                Localize rapidamente demandas, status e criticidade para priorização.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_240px]">
+              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/35 px-4 py-3">
+                <Search size={18} className="text-zinc-500" />
+                <input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar por cliente, corretora, seguradora ou ramo"
+                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                />
+              </label>
+
+              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/35 px-4 py-3">
+                <Filter size={18} className="text-zinc-500" />
+                <select
+                  value={filtroStatus}
+                  onChange={(e) =>
+                    setFiltroStatus(e.target.value as "Todos" | StatusAnalise)
+                  }
+                  className="w-full bg-transparent text-sm text-white outline-none"
+                >
+                  <option value="Todos" className="bg-black text-white">
+                    Todos os status
+                  </option>
+                  <option value="Nova" className="bg-black text-white">
+                    Nova
+                  </option>
+                  <option value="Em análise" className="bg-black text-white">
+                    Em análise
+                  </option>
+                  <option value="Parecer emitido" className="bg-black text-white">
+                    Parecer emitido
+                  </option>
+                  <option value="Aguardando ajuste" className="bg-black text-white">
+                    Aguardando ajuste
+                  </option>
+                  <option value="Concluída" className="bg-black text-white">
+                    Concluída
+                  </option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-6 overflow-x-auto">
+            <table className="w-full min-w-[1220px] border-separate border-spacing-y-3">
+              <thead>
+                <tr>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Cliente
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Corretora
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Seguradora
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Ramo
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Status
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Risco
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Atualização
+                  </th>
+                  <th className="px-4 text-right text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {analisesFiltradas.map((item) => (
+                  <tr key={item.id}>
+                    <td className="rounded-l-2xl border-y border-l border-white/6 bg-white/[0.03] px-4 py-4">
                       <div>
-                        <p className="text-sm text-zinc-400">{card.titulo}</p>
-                        <h3 className="mt-3 text-3xl font-bold text-white">
-                          {card.valor}
-                        </h3>
-                        <p className="mt-2 text-sm text-zinc-500">
-                          {card.detalhe}
+                        <p className="text-sm font-semibold text-white">{item.cliente}</p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Analista: {item.analista}
                         </p>
                       </div>
+                    </td>
 
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#C8A44D]/25 bg-[#C8A44D]/10 text-[#E7C46A]">
-                        <Icon size={22} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4 text-sm text-white">
+                      {item.corretora}
+                    </td>
 
-            <div className="mt-6 grid grid-cols-1 gap-6 2xl:grid-cols-[1.45fr_1fr]">
-              <div className="rounded-3xl border border-[#C8A44D]/15 bg-zinc-950/90 p-5">
-                <div className="mb-5 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold">Fila técnica</h3>
-                    <p className="text-sm text-zinc-400">
-                      Análises que exigem acompanhamento imediato.
-                    </p>
-                  </div>
-                  <Link
-                    href="/analise-tecnica/cotacoes"
-                    className="rounded-xl border border-[#C8A44D]/20 px-3 py-2 text-sm text-[#E7C46A] transition hover:bg-[#C8A44D]/10"
-                  >
-                    Ver tudo
-                  </Link>
-                </div>
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4 text-sm text-white">
+                      {item.seguradora}
+                    </td>
 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full border-separate border-spacing-y-3">
-                    <thead>
-                      <tr className="text-left text-xs uppercase tracking-[0.2em] text-zinc-500">
-                        <th className="px-3">Cliente</th>
-                        <th className="px-3">Corretora</th>
-                        <th className="px-3">Seguro</th>
-                        <th className="px-3">Status</th>
-                        <th className="px-3">Prioridade</th>
-                        <th className="px-3">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filaAnalises.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="rounded-2xl bg-white/[0.03] text-sm text-zinc-200"
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4 text-sm text-white">
+                      {item.ramo}
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
+                      <StatusBadge status={item.status} />
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
+                      <RiscoBadge risco={item.risco} />
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4 text-sm text-zinc-300">
+                      {item.atualizadoEm}
+                    </td>
+
+                    <td className="rounded-r-2xl border-y border-r border-white/6 bg-white/[0.03] px-4 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/analise-tecnica/${item.id}`}
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-xs font-semibold text-white transition hover:border-[#d4af37]/30 hover:bg-[#d4af37]/8"
                         >
-                          <td className="rounded-l-2xl px-3 py-4 font-medium">
-                            {item.cliente}
-                          </td>
-                          <td className="px-3 py-4 text-zinc-300">
-                            {item.corretora}
-                          </td>
-                          <td className="px-3 py-4 text-zinc-300">
-                            {item.seguro}
-                          </td>
-                          <td className="px-3 py-4">
-                            <span
-                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${badgeStatusColor(
-                                item.status
-                              )}`}
-                            >
-                              {item.status}
-                            </span>
-                          </td>
-                          <td className="px-3 py-4">
-                            <span
-                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${badgePrioridadeColor(
-                                item.prioridade
-                              )}`}
-                            >
-                              {item.prioridade}
-                            </span>
-                          </td>
-                          <td className="rounded-r-2xl px-3 py-4">
-                            <Link
-                              href="/analise-tecnica/motor-risco"
-                              className="inline-flex rounded-xl border border-[#C8A44D]/25 px-3 py-2 text-xs font-semibold text-[#F3D585] transition hover:bg-[#C8A44D]/10"
-                            >
-                              Abrir análise
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                          <Eye size={15} />
+                          Abrir
+                        </Link>
 
-              <div className="space-y-6">
-                <div className="rounded-3xl border border-[#C8A44D]/15 bg-zinc-950/90 p-5">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold">Atalhos rápidos</h3>
-                    <p className="text-sm text-zinc-400">
-                      Acesso direto ao núcleo técnico.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
-                    <Link
-                      href="/analise-tecnica/nova"
-                      className="rounded-2xl border border-[#C8A44D]/20 bg-[#C8A44D]/8 px-4 py-4 text-sm font-medium text-white transition hover:bg-[#C8A44D]/14"
-                    >
-                      Nova análise
-                    </Link>
-                    <Link
-                      href="/analise-tecnica/motor-risco"
-                      className="rounded-2xl border border-[#C8A44D]/20 bg-white/[0.02] px-4 py-4 text-sm font-medium text-white transition hover:bg-[#C8A44D]/10"
-                    >
-                      Motor de risco
-                    </Link>
-                    <Link
-                      href="/analise-tecnica/pareceres"
-                      className="rounded-2xl border border-[#C8A44D]/20 bg-white/[0.02] px-4 py-4 text-sm font-medium text-white transition hover:bg-[#C8A44D]/10"
-                    >
-                      Emitir e revisar pareceres
-                    </Link>
-                    <Link
-                      href="/analise-tecnica/relatorios"
-                      className="rounded-2xl border border-[#C8A44D]/20 bg-white/[0.02] px-4 py-4 text-sm font-medium text-white transition hover:bg-[#C8A44D]/10"
-                    >
-                      Relatórios técnicos
-                    </Link>
-                    <Link
-                      href="/clientes"
-                      className="rounded-2xl border border-[#C8A44D]/20 bg-white/[0.02] px-4 py-4 text-sm font-medium text-white transition hover:bg-[#C8A44D]/10"
-                    >
-                      Clientes críticos
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-[#C8A44D]/15 bg-zinc-950/90 p-5">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold">Últimos pareceres</h3>
-                    <p className="text-sm text-zinc-400">
-                      Situação recente da operação técnica.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    {pareceresRecentes.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-white/5 bg-white/[0.03] p-4"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="font-medium text-white">
-                              {item.cliente}
-                            </p>
-                            <p className="mt-1 text-sm text-zinc-400">
-                              {item.corretora}
-                            </p>
-                          </div>
-
-                          <span
-                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${badgeRiscoColor(
-                              item.risco
-                            )}`}
-                          >
-                            Risco {item.risco}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 flex items-center justify-between text-sm text-zinc-400">
-                          <span>{item.data}</span>
-                          <span>{item.status}</span>
-                        </div>
+                        <Link
+                          href={`/analise-tecnica/${item.id}/parecer`}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/8 px-3 py-2 text-xs font-semibold text-[#f3d77a] transition hover:border-[#d4af37]/35 hover:bg-[#d4af37]/12"
+                        >
+                          Parecer
+                        </Link>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {analisesFiltradas.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="rounded-2xl border border-white/8 bg-white/[0.03] px-6 py-10 text-center"
+                    >
+                      <p className="text-base font-medium text-white">
+                        Nenhuma análise encontrada
+                      </p>
+                      <p className="mt-2 text-sm text-zinc-500">
+                        Ajuste a busca ou revise o filtro selecionado.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+
+        <div className="space-y-6">
+          <SectionCard>
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#d4af37]/20 bg-[#d4af37]/8 text-[#d4af37]">
+                <ShieldCheck size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight text-white">
+                  Direção técnica
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-zinc-400">
+                  Priorize riscos críticos, valide inconsistências documentais e
+                  mantenha pareceres objetivos para acelerar a resposta comercial
+                  sem perder profundidade técnica.
+                </p>
               </div>
             </div>
+          </SectionCard>
 
-            <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1fr]">
-              <div className="rounded-3xl border border-[#C8A44D]/15 bg-zinc-950/90 p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <AlertTriangle className="text-[#E7C46A]" size={20} />
-                  <div>
-                    <h3 className="text-lg font-semibold">Pendências técnicas</h3>
-                    <p className="text-sm text-zinc-400">
-                      Pontos que precisam de atenção no fluxo.
+          <SectionCard>
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 text-red-300">
+                <AlertTriangle size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight text-white">
+                  Alertas de prioridade
+                </h2>
+
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-sm font-medium text-white">
+                      Construtora Vale Forte
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-zinc-400">
+                      Risco crítico com necessidade de ajuste antes do envio final.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-sm font-medium text-white">
+                      Metalúrgica Horizonte
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-zinc-400">
+                      Nova análise com sensibilidade industrial elevada.
                     </p>
                   </div>
                 </div>
-
-                <div className="space-y-3">
-                  {pendenciasTecnicas.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`rounded-2xl border p-4 ${pendenciaColor(
-                        item.nivel
-                      )}`}
-                    >
-                      <p className="font-medium text-white">{item.titulo}</p>
-                      <p className="mt-1 text-sm text-zinc-300">
-                        {item.descricao}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-[#C8A44D]/15 bg-zinc-950/90 p-5">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold">
-                    Visão estratégica da área técnica
-                  </h3>
-                  <p className="text-sm text-zinc-400">
-                    Resumo operacional para tomada de decisão.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-                    <p className="text-sm text-zinc-400">Tempo médio de análise</p>
-                    <p className="mt-2 text-2xl font-bold text-white">3h42</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-                    <p className="text-sm text-zinc-400">Conversão técnica</p>
-                    <p className="mt-2 text-2xl font-bold text-white">74%</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-                    <p className="text-sm text-zinc-400">Processos críticos</p>
-                    <p className="mt-2 text-2xl font-bold text-white">2</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-                    <p className="text-sm text-zinc-400">Documentos pendentes</p>
-                    <p className="mt-2 text-2xl font-bold text-white">7</p>
-                  </div>
-                </div>
-
-                <div className="mt-5 rounded-2xl border border-[#C8A44D]/20 bg-gradient-to-r from-[#C8A44D]/10 to-transparent p-4">
-                  <p className="text-sm font-medium text-[#F3D585]">
-                    Direção recomendada
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    Priorizar hoje os clientes com status crítico e as análises
-                    patrimoniais pendentes de documentação. Isso ajuda a reduzir
-                    gargalo no parecer técnico e acelerar a cotação comercial.
-                  </p>
-                </div>
               </div>
             </div>
-          </section>
-        </main>
+          </SectionCard>
+
+          <SectionCard>
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-300">
+                <ClipboardCheck size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight text-white">
+                  Prioridade do dia
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-zinc-400">
+                  Fechar os pareceres pendentes, revisar riscos altos e manter a
+                  fila técnica organizada para sustentar o pré-lançamento com
+                  qualidade e autoridade.
+                </p>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
       </div>
-    </div>
+    </SegmaxShell>
   );
 }

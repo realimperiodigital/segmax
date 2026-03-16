@@ -1,670 +1,255 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowRight,
+  ClipboardList,
+  Eye,
+  FileText,
+  Plus,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
 
-type Corretora = {
-  id: string;
-  nome_fantasia: string | null;
-};
+import SegmaxShell, { SegmaxMenuItem } from "@/components/segmaxshell";
 
-type Usuario = {
-  id: string;
-  nome: string | null;
-  corretora_id: string | null;
-};
-
-type Cliente = {
-  id: string;
-  nome: string | null;
-  corretora_id: string | null;
-};
+type StatusCotacao =
+  | "Nova"
+  | "Em análise"
+  | "Aguardando seguradora"
+  | "Proposta enviada"
+  | "Fechada"
+  | "Recusada";
 
 type Cotacao = {
   id: string;
-  corretora_id: string | null;
-  usuario_id: string | null;
-  cliente_id: string | null;
-  produto: string | null;
-  numero_proposta: string | null;
-  renovacao: boolean;
-  inicio_vigencia: string | null;
-  fim_vigencia: string | null;
-  moeda: string | null;
-  status: "em_analise" | "cotando" | "proposta_emitida" | "fechada" | "recusada" | string;
-  created_at: string | null;
-  excluido: boolean;
+  cliente: string;
+  corretora: string;
+  ramo: string;
+  seguradora: string;
+  responsavel: string;
+  valor: string;
+  status: StatusCotacao;
 };
+
+const menuItems: SegmaxMenuItem[] = [
+  { label: "Centro de Controle", href: "/dashboard", exact: true },
+  { label: "Corretoras", href: "/corretoras" },
+  { label: "Usuários", href: "/usuarios" },
+  { label: "Clientes", href: "/clientes" },
+  { label: "Seguradoras", href: "/seguradoras" },
+  { label: "Cotações", href: "/cotacoes" },
+  { label: "Análise Técnica", href: "/analise-tecnica" },
+  { label: "Financeiro", href: "/financeiro" },
+];
+
+const cotacoesBase: Cotacao[] = [
+  {
+    id: "1",
+    cliente: "Grupo Alpha Logística",
+    corretora: "Prime Broker",
+    ramo: "Patrimonial Empresarial",
+    seguradora: "Porto Seguro",
+    responsavel: "Carlos Mendes",
+    valor: "R$ 3.200.000",
+    status: "Em análise",
+  },
+  {
+    id: "2",
+    cliente: "Metalúrgica Horizonte",
+    corretora: "Atlas Corretora",
+    ramo: "Patrimonial Industrial",
+    seguradora: "Tokio Marine",
+    responsavel: "Fernanda Lima",
+    valor: "R$ 5.800.000",
+    status: "Aguardando seguradora",
+  },
+  {
+    id: "3",
+    cliente: "Rede Nova Visão",
+    corretora: "Alpha Consult",
+    ramo: "Patrimonial Comercial",
+    seguradora: "Allianz",
+    responsavel: "Juliana Prado",
+    valor: "R$ 2.100.000",
+    status: "Proposta enviada",
+  },
+  {
+    id: "4",
+    cliente: "Construtora Vale Forte",
+    corretora: "Prime Broker",
+    ramo: "Patrimonial Construção",
+    seguradora: "Mapfre",
+    responsavel: "Carlos Mendes",
+    valor: "R$ 7.500.000",
+    status: "Nova",
+  },
+];
+
+function SectionCard({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[28px] border border-[#d4af37]/14 bg-black/45 p-6 backdrop-blur-sm">
+      {children}
+    </section>
+  );
+}
+
+function StatusBadge({ status }: { status: StatusCotacao }) {
+  const styles: Record<StatusCotacao, string> = {
+    Nova: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+    "Em análise": "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    "Aguardando seguradora": "border-purple-500/30 bg-purple-500/10 text-purple-300",
+    "Proposta enviada": "border-blue-500/30 bg-blue-500/10 text-blue-300",
+    Fechada: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    Recusada: "border-red-500/30 bg-red-500/10 text-red-300",
+  };
+
+  return (
+    <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${styles[status]}`}>
+      {status}
+    </span>
+  );
+}
 
 export default function CotacoesPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const corretoraIdUrl = searchParams.get("corretora_id") || "";
-
-  const [corretoras, setCorretoras] = useState<Corretora[]>([]);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [cotacoes, setCotacoes] = useState<Cotacao[]>([]);
-
-  const [corretoraId, setCorretoraId] = useState(corretoraIdUrl);
   const [busca, setBusca] = useState("");
-  const [statusFiltro, setStatusFiltro] = useState("todos");
-  const [loading, setLoading] = useState(true);
 
-  async function carregarBase() {
-    setLoading(true);
+  const cotacoes = useMemo(() => {
+    const termo = busca.toLowerCase();
 
-    const [
-      { data: corretorasData, error: corretorasError },
-      { data: usuariosData, error: usuariosError },
-      { data: clientesData, error: clientesError },
-      { data: cotacoesData, error: cotacoesError },
-    ] = await Promise.all([
-      supabase
-        .from("corretoras")
-        .select("id, nome_fantasia")
-        .eq("excluido", false)
-        .order("nome_fantasia"),
-      supabase
-        .from("usuarios")
-        .select("id, nome, corretora_id")
-        .eq("excluido", false)
-        .order("nome"),
-      supabase
-        .from("clientes")
-        .select("id, nome, corretora_id")
-        .eq("excluido", false)
-        .order("nome"),
-      supabase
-        .from("cotacoes")
-        .select(
-          "id, corretora_id, usuario_id, cliente_id, produto, numero_proposta, renovacao, inicio_vigencia, fim_vigencia, moeda, status, created_at, excluido"
-        )
-        .eq("excluido", false)
-        .order("created_at", { ascending: false }),
-    ]);
-
-    if (corretorasError) {
-      alert(`Erro ao carregar corretoras: ${corretorasError.message}`);
-      setLoading(false);
-      return;
-    }
-
-    if (usuariosError) {
-      alert(`Erro ao carregar usuários: ${usuariosError.message}`);
-      setLoading(false);
-      return;
-    }
-
-    if (clientesError) {
-      alert(`Erro ao carregar clientes: ${clientesError.message}`);
-      setLoading(false);
-      return;
-    }
-
-    if (cotacoesError) {
-      alert(`Erro ao carregar cotações: ${cotacoesError.message}`);
-      setLoading(false);
-      return;
-    }
-
-    setCorretoras(corretorasData || []);
-    setUsuarios(usuariosData || []);
-    setClientes(clientesData || []);
-    setCotacoes(cotacoesData || []);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    carregarBase();
-  }, []);
-
-  useEffect(() => {
-    setCorretoraId(corretoraIdUrl);
-  }, [corretoraIdUrl]);
-
-  const nomeCorretoraSelecionada = useMemo(() => {
-    if (!corretoraId) return "";
-    const corretora = corretoras.find((item) => item.id === corretoraId);
-    return corretora?.nome_fantasia || "";
-  }, [corretoras, corretoraId]);
-
-  const cotacoesFiltradas = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-
-    return cotacoes.filter((cotacao) => {
-      const corretora = corretoras.find((c) => c.id === cotacao.corretora_id);
-      const usuario = usuarios.find((u) => u.id === cotacao.usuario_id);
-      const cliente = clientes.find((c) => c.id === cotacao.cliente_id);
-
-      const matchCorretora = !corretoraId || cotacao.corretora_id === corretoraId;
-
-      const matchBusca =
-        termo === "" ||
-        (cotacao.produto || "").toLowerCase().includes(termo) ||
-        (cotacao.numero_proposta || "").toLowerCase().includes(termo) ||
-        (cliente?.nome || "").toLowerCase().includes(termo) ||
-        (usuario?.nome || "").toLowerCase().includes(termo) ||
-        (corretora?.nome_fantasia || "").toLowerCase().includes(termo);
-
-      const matchStatus =
-        statusFiltro === "todos" || cotacao.status === statusFiltro;
-
-      return matchCorretora && matchBusca && matchStatus;
-    });
-  }, [cotacoes, corretoras, usuarios, clientes, corretoraId, busca, statusFiltro]);
-
-  const totalCotacoes = cotacoesFiltradas.length;
-  const totalAnalise = cotacoesFiltradas.filter((c) => c.status === "em_analise").length;
-  const totalCotando = cotacoesFiltradas.filter((c) => c.status === "cotando").length;
-  const totalFechadas = cotacoesFiltradas.filter((c) => c.status === "fechada").length;
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-
-    try {
-      return new Date(data).toLocaleDateString("pt-BR");
-    } catch {
-      return "-";
-    }
-  }
-
-  function labelStatus(status: string) {
-    if (status === "em_analise") return "Em análise";
-    if (status === "cotando") return "Cotando";
-    if (status === "proposta_emitida") return "Proposta emitida";
-    if (status === "fechada") return "Fechada";
-    if (status === "recusada") return "Recusada";
-    return status || "-";
-  }
-
-  function statusBadge(status: string): React.CSSProperties {
-    if (status === "em_analise") {
-      return {
-        background: "#dbeafe",
-        color: "#1d4ed8",
-        border: "1px solid #93c5fd",
-      };
-    }
-
-    if (status === "cotando") {
-      return {
-        background: "#fef3c7",
-        color: "#92400e",
-        border: "1px solid #fcd34d",
-      };
-    }
-
-    if (status === "proposta_emitida") {
-      return {
-        background: "#ede9fe",
-        color: "#6d28d9",
-        border: "1px solid #c4b5fd",
-      };
-    }
-
-    if (status === "fechada") {
-      return {
-        background: "#dcfce7",
-        color: "#166534",
-        border: "1px solid #86efac",
-      };
-    }
-
-    if (status === "recusada") {
-      return {
-        background: "#fee2e2",
-        color: "#991b1b",
-        border: "1px solid #fecaca",
-      };
-    }
-
-    return {
-      background: "#e5e7eb",
-      color: "#111827",
-      border: "1px solid #d1d5db",
-    };
-  }
-
-  async function alterarStatus(
-    id: string,
-    novoStatus: "em_analise" | "cotando" | "proposta_emitida" | "fechada" | "recusada"
-  ) {
-    const confirmar = window.confirm(
-      `Deseja realmente alterar o status da cotação para "${labelStatus(novoStatus)}"?`
+    return cotacoesBase.filter((c) =>
+      c.cliente.toLowerCase().includes(termo) ||
+      c.corretora.toLowerCase().includes(termo) ||
+      c.ramo.toLowerCase().includes(termo)
     );
-
-    if (!confirmar) return;
-
-    const { error } = await supabase
-      .from("cotacoes")
-      .update({ status: novoStatus })
-      .eq("id", id);
-
-    if (error) {
-      alert(`Erro ao atualizar status da cotação: ${error.message}`);
-      return;
-    }
-
-    await carregarBase();
-  }
-
-  async function excluirCotacao(id: string) {
-    const confirmar = window.confirm(
-      "Deseja realmente excluir esta cotação? Essa ação será apenas exclusão lógica."
-    );
-
-    if (!confirmar) return;
-
-    const { error } = await supabase
-      .from("cotacoes")
-      .update({ excluido: true })
-      .eq("id", id);
-
-    if (error) {
-      alert(`Erro ao excluir cotação: ${error.message}`);
-      return;
-    }
-
-    await carregarBase();
-  }
+  }, [busca]);
 
   return (
-    <div style={pageStyle}>
-      <div style={headerRow}>
-        <div>
-          <h1 style={titleStyle}>Cotações</h1>
-          <p style={subtitleStyle}>
-            {nomeCorretoraSelecionada
-              ? `Gerencie as cotações da corretora ${nomeCorretoraSelecionada}.`
-              : "Gerencie as cotações vinculadas às corretoras do SEGMAX CRM."}
-          </p>
-        </div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() =>
-              corretoraId
-                ? router.push(`/cotacoes/nova?corretora_id=${corretoraId}`)
-                : router.push("/cotacoes/nova")
-            }
-            style={primaryButton}
+    <SegmaxShell
+      title="Gestão de Cotações"
+      subtitle="Controle técnico e comercial das propostas de seguros."
+      username="Renato"
+      userrole="Super Master"
+      menuitems={menuItems}
+      actions={
+        <>
+          <Link
+            href="/cotacoes/nova"
+            className="inline-flex items-center gap-2 rounded-2xl border border-[#d4af37] bg-[#d4af37] px-5 py-3 text-sm font-semibold text-black"
           >
-            + Nova Cotação
-          </button>
+            <Plus size={18} />
+            Nova cotação
+          </Link>
 
-          <button
-            type="button"
-            onClick={() => router.push("/corretoras")}
-            style={secondaryButton}
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 rounded-2xl border border-[#d4af37]/25 px-5 py-3 text-sm text-white"
           >
-            Voltar para Corretoras
-          </button>
-        </div>
-      </div>
+            <ArrowRight size={18} />
+            Voltar
+          </Link>
+        </>
+      }
+    >
 
-      <div style={cardsGrid}>
-        <ResumoCard titulo="Total" valor={String(totalCotacoes)} />
-        <ResumoCard titulo="Em análise" valor={String(totalAnalise)} />
-        <ResumoCard titulo="Cotando" valor={String(totalCotando)} />
-        <ResumoCard titulo="Fechadas" valor={String(totalFechadas)} />
-      </div>
+      <SectionCard>
 
-      <div style={filterCard}>
-        <div style={filterGrid}>
-          <select
-            value={corretoraId}
-            onChange={(e) => setCorretoraId(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">Todas as corretoras</option>
-            {corretoras.map((corretora) => (
-              <option key={corretora.id} value={corretora.id}>
-                {corretora.nome_fantasia || "Corretora sem nome"}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center justify-between border-b border-white/10 pb-6">
 
-          <input
-            type="text"
-            placeholder="Buscar por produto, proposta, cliente, usuário ou corretora"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            style={inputStyle}
-          />
+          <h2 className="text-xl font-semibold text-white">
+            Cotações registradas
+          </h2>
 
-          <select
-            value={statusFiltro}
-            onChange={(e) => setStatusFiltro(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="todos">Todos os status</option>
-            <option value="em_analise">Em análise</option>
-            <option value="cotando">Cotando</option>
-            <option value="proposta_emitida">Proposta emitida</option>
-            <option value="fechada">Fechada</option>
-            <option value="recusada">Recusada</option>
-          </select>
-        </div>
-      </div>
-
-      <div style={tableCard}>
-        {loading ? (
-          <div style={emptyBox}>Carregando cotações...</div>
-        ) : cotacoesFiltradas.length === 0 ? (
-          <div style={emptyBox}>Nenhuma cotação encontrada.</div>
-        ) : (
-          <div style={tableWrapper}>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Cotação</th>
-                  <th style={thStyle}>Corretora</th>
-                  <th style={thStyle}>Cliente</th>
-                  <th style={thStyle}>Usuário</th>
-                  <th style={thStyle}>Vigência</th>
-                  <th style={thStyle}>Status</th>
-                  <th style={thStyle}>Cadastro</th>
-                  <th style={thStyle}>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cotacoesFiltradas.map((cotacao) => {
-                  const corretora = corretoras.find((c) => c.id === cotacao.corretora_id);
-                  const usuario = usuarios.find((u) => u.id === cotacao.usuario_id);
-                  const cliente = clientes.find((c) => c.id === cotacao.cliente_id);
-
-                  return (
-                    <tr key={cotacao.id}>
-                      <td style={tdStyle}>
-                        <div style={{ fontWeight: 700, color: "#111827" }}>
-                          {cotacao.produto || "-"}
-                        </div>
-                        <div style={subInfoStyle}>
-                          Proposta: {cotacao.numero_proposta || "-"}
-                        </div>
-                        <div style={subInfoStyle}>
-                          Renovação: {cotacao.renovacao ? "Sim" : "Não"}
-                        </div>
-                        <div style={subInfoStyle}>
-                          Moeda: {cotacao.moeda || "BRL"}
-                        </div>
-                      </td>
-
-                      <td style={tdStyle}>
-                        <div style={subInfoStrong}>
-                          {corretora?.nome_fantasia || "-"}
-                        </div>
-                      </td>
-
-                      <td style={tdStyle}>
-                        <div style={subInfoStrong}>
-                          {cliente?.nome || "-"}
-                        </div>
-                      </td>
-
-                      <td style={tdStyle}>
-                        <div style={subInfoStrong}>
-                          {usuario?.nome || "-"}
-                        </div>
-                      </td>
-
-                      <td style={tdStyle}>
-                        <div style={subInfoStrong}>
-                          Início: {formatarData(cotacao.inicio_vigencia)}
-                        </div>
-                        <div style={subInfoStyle}>
-                          Fim: {formatarData(cotacao.fim_vigencia)}
-                        </div>
-                      </td>
-
-                      <td style={tdStyle}>
-                        <span style={{ ...badgeStyle, ...statusBadge(cotacao.status) }}>
-                          {labelStatus(cotacao.status)}
-                        </span>
-                      </td>
-
-                      <td style={tdStyle}>{formatarData(cotacao.created_at)}</td>
-
-                      <td style={tdStyle}>
-                        <div style={actionsWrap}>
-                          <select
-                            value={cotacao.status}
-                            onChange={(e) =>
-                              alterarStatus(
-                                cotacao.id,
-                                e.target.value as
-                                  | "em_analise"
-                                  | "cotando"
-                                  | "proposta_emitida"
-                                  | "fechada"
-                                  | "recusada"
-                              )
-                            }
-                            style={statusSelect}
-                          >
-                            <option value="em_analise">Em análise</option>
-                            <option value="cotando">Cotando</option>
-                            <option value="proposta_emitida">Proposta emitida</option>
-                            <option value="fechada">Fechada</option>
-                            <option value="recusada">Recusada</option>
-                          </select>
-
-                          <button
-                            type="button"
-                            onClick={() => excluirCotacao(cotacao.id)}
-                            style={dangerButton}
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="flex items-center gap-2 border border-white/10 rounded-xl px-3 py-2">
+            <Search size={16} className="text-zinc-400"/>
+            <input
+              placeholder="Buscar cotação"
+              value={busca}
+              onChange={(e)=>setBusca(e.target.value)}
+              className="bg-transparent outline-none text-sm text-white"
+            />
           </div>
-        )}
-      </div>
-    </div>
+
+        </div>
+
+        <div className="mt-6 overflow-x-auto">
+
+          <table className="w-full border-separate border-spacing-y-3">
+
+            <thead>
+
+              <tr>
+                <th className="text-left text-xs text-zinc-500 uppercase">Cliente</th>
+                <th className="text-left text-xs text-zinc-500 uppercase">Corretora</th>
+                <th className="text-left text-xs text-zinc-500 uppercase">Ramo</th>
+                <th className="text-left text-xs text-zinc-500 uppercase">Seguradora</th>
+                <th className="text-left text-xs text-zinc-500 uppercase">Responsável</th>
+                <th className="text-left text-xs text-zinc-500 uppercase">Valor</th>
+                <th className="text-left text-xs text-zinc-500 uppercase">Status</th>
+                <th className="text-right text-xs text-zinc-500 uppercase">Ações</th>
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              {cotacoes.map((cotacao)=>(
+                <tr key={cotacao.id}>
+
+                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5 rounded-l-xl">
+                    {cotacao.cliente}
+                  </td>
+
+                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
+                    {cotacao.corretora}
+                  </td>
+
+                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
+                    {cotacao.ramo}
+                  </td>
+
+                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
+                    {cotacao.seguradora}
+                  </td>
+
+                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
+                    {cotacao.responsavel}
+                  </td>
+
+                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
+                    {cotacao.valor}
+                  </td>
+
+                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
+                    <StatusBadge status={cotacao.status}/>
+                  </td>
+
+                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5 rounded-r-xl text-right">
+                    <Link
+                      href={`/cotacoes/${cotacao.id}`}
+                      className="text-sm text-[#d4af37] inline-flex items-center gap-1"
+                    >
+                      <Eye size={16}/>
+                      Abrir
+                    </Link>
+                  </td>
+
+                </tr>
+              ))}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </SectionCard>
+
+    </SegmaxShell>
   );
 }
-
-function ResumoCard({ titulo, valor }: { titulo: string; valor: string }) {
-  return (
-    <div style={summaryCard}>
-      <div style={summaryTitle}>{titulo}</div>
-      <div style={summaryValue}>{valor}</div>
-    </div>
-  );
-}
-
-const pageStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 16,
-};
-
-const headerRow: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap",
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 32,
-  color: "#111827",
-};
-
-const subtitleStyle: React.CSSProperties = {
-  margin: "6px 0 0 0",
-  color: "#6b7280",
-  fontSize: 15,
-};
-
-const cardsGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 12,
-};
-
-const summaryCard: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 16,
-  padding: 18,
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  border: "1px solid #eef2f7",
-};
-
-const summaryTitle: React.CSSProperties = {
-  fontSize: 14,
-  color: "#6b7280",
-  marginBottom: 8,
-};
-
-const summaryValue: React.CSSProperties = {
-  fontSize: 28,
-  fontWeight: 800,
-  color: "#111827",
-};
-
-const filterCard: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 16,
-  padding: 18,
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  border: "1px solid #eef2f7",
-};
-
-const filterGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1.1fr 1.8fr 1fr",
-  gap: 12,
-};
-
-const tableCard: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 16,
-  padding: 18,
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  border: "1px solid #eef2f7",
-};
-
-const tableWrapper: React.CSSProperties = {
-  width: "100%",
-  overflowX: "auto",
-};
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  minWidth: 1250,
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "14px 12px",
-  borderBottom: "1px solid #e5e7eb",
-  color: "#374151",
-  fontSize: 13,
-  fontWeight: 700,
-  background: "#f9fafb",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "14px 12px",
-  borderBottom: "1px solid #f3f4f6",
-  verticalAlign: "top",
-  color: "#111827",
-  fontSize: 14,
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: 12,
-  border: "1px solid #d1d5db",
-  borderRadius: 10,
-  fontSize: 15,
-  background: "#fff",
-  width: "100%",
-};
-
-const primaryButton: React.CSSProperties = {
-  padding: "12px 16px",
-  background: "#07163a",
-  color: "#ffffff",
-  border: "none",
-  borderRadius: 10,
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const secondaryButton: React.CSSProperties = {
-  padding: "10px 12px",
-  background: "#e5e7eb",
-  color: "#111827",
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
-const dangerButton: React.CSSProperties = {
-  padding: "10px 12px",
-  background: "#fee2e2",
-  color: "#991b1b",
-  border: "1px solid #fecaca",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const emptyBox: React.CSSProperties = {
-  padding: 28,
-  textAlign: "center",
-  color: "#6b7280",
-  fontSize: 15,
-};
-
-const subInfoStyle: React.CSSProperties = {
-  marginTop: 4,
-  color: "#6b7280",
-  fontSize: 13,
-};
-
-const subInfoStrong: React.CSSProperties = {
-  color: "#111827",
-  fontSize: 14,
-  fontWeight: 600,
-};
-
-const badgeStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "6px 10px",
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 700,
-  textTransform: "capitalize",
-};
-
-const actionsWrap: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 8,
-};
-
-const statusSelect: React.CSSProperties = {
-  padding: "10px 12px",
-  border: "1px solid #d1d5db",
-  borderRadius: 8,
-  background: "#fff",
-  cursor: "pointer",
-  minWidth: 160,
-};

@@ -1,553 +1,462 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useState } from "react";
+import Link from "next/link";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  FileText,
+  Save,
+  ShieldCheck,
+} from "lucide-react";
 
-type PerfilUsuario = {
-  id: string;
-  user_id: string;
-  nome: string | null;
-  email: string | null;
-  role: string | null;
-  corretora_id: string | null;
-};
+import SegmaxShell, { SegmaxMenuItem } from "@/components/segmaxshell";
 
-type Cliente = {
-  id: string;
-  corretora_id: string | null;
-  usuario_id: string | null;
-  tipo_pessoa: string | null;
-  nome: string | null;
-  documento: string | null;
-  cpf_cnpj: string | null;
-  telefone: string | null;
-  email: string | null;
-  cidade: string | null;
-  estado: string | null;
-  status: string | null;
-  ativo: boolean | null;
-  excluido: boolean | null;
-};
-
-type Corretora = {
-  id: string;
-  nome_fantasia: string | null;
-  razao_social: string | null;
-};
-
-type FormState = {
-  cliente_id: string;
-  observacoes: string;
-  status: string;
-};
-
-const STATUS_OPTIONS = [
-  { value: "rascunho", label: "Rascunho" },
-  { value: "em_analise", label: "Em análise" },
-  { value: "aguardando_documentos", label: "Aguardando documentos" },
+const menuItems: SegmaxMenuItem[] = [
+  { label: "Centro de Controle", href: "/dashboard", exact: true },
+  { label: "Corretoras", href: "/corretoras" },
+  { label: "Usuários", href: "/usuarios" },
+  { label: "Clientes", href: "/clientes" },
+  { label: "Seguradoras", href: "/seguradoras" },
+  { label: "Cotações", href: "/cotacoes" },
+  { label: "Análise Técnica", href: "/analise-tecnica" },
+  { label: "Financeiro", href: "/financeiro" },
 ];
 
-function normalizarTexto(valor: string | null | undefined) {
-  return (valor ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+function SectionCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={[
+        "rounded-[28px] border border-[#d4af37]/14 bg-black/45 p-6 shadow-[0_0_30px_rgba(0,0,0,0.28)] backdrop-blur-sm",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </section>
+  );
 }
 
-function somenteDigitos(valor: string | null | undefined) {
-  return (valor ?? "").replace(/\D/g, "");
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+      {children}
+    </label>
+  );
 }
 
-function formatarDocumento(valor: string | null | undefined) {
-  const digitos = somenteDigitos(valor);
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  const { className = "", ...rest } = props;
 
-  if (digitos.length === 11) {
-    return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-  }
-
-  if (digitos.length === 14) {
-    return digitos.replace(
-      /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
-      "$1.$2.$3/$4-$5"
-    );
-  }
-
-  return valor ?? "";
+  return (
+    <input
+      {...rest}
+      className={[
+        "w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition",
+        "placeholder:text-zinc-500 focus:border-[#d4af37]/35 focus:bg-black/45",
+        className,
+      ].join(" ")}
+    />
+  );
 }
+
+function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const { className = "", ...rest } = props;
+
+  return (
+    <textarea
+      {...rest}
+      className={[
+        "w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition",
+        "placeholder:text-zinc-500 focus:border-[#d4af37]/35 focus:bg-black/45",
+        className,
+      ].join(" ")}
+    />
+  );
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const { className = "", children, ...rest } = props;
+
+  return (
+    <select
+      {...rest}
+      className={[
+        "w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition",
+        "focus:border-[#d4af37]/35 focus:bg-black/45",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </select>
+  );
+}
+
+function ActionButton({
+  href,
+  label,
+  icon,
+}: {
+  href: string;
+  label: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-2 rounded-2xl border border-[#d4af37]/25 bg-black/30 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:bg-[#d4af37]/8"
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+}
+
+type FormState = {
+  clienteId: string;
+  corretoraId: string;
+  tipoSeguro: string;
+  seguradora: string;
+  premioEstimado: string;
+  coberturaOferecida: string;
+  atividadePrincipal: string;
+  observacoes: string;
+};
+
+const initialForm: FormState = {
+  clienteId: "",
+  corretoraId: "",
+  tipoSeguro: "",
+  seguradora: "",
+  premioEstimado: "",
+  coberturaOferecida: "",
+  atividadePrincipal: "",
+  observacoes: "",
+};
 
 export default function NovaCotacaoPage() {
-  const router = useRouter();
-
-  const [loadingInicial, setLoadingInicial] = useState(true);
+  const [form, setForm] = useState<FormState>(initialForm);
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [sucesso, setSucesso] = useState<string | null>(null);
+  const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
 
-  const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
-  const [corretora, setCorretora] = useState<Corretora | null>(null);
-
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [buscaCliente, setBuscaCliente] = useState("");
-  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
-
-  const [form, setForm] = useState<FormState>({
-    cliente_id: "",
-    observacoes: "",
-    status: "rascunho",
-  });
-
-  useEffect(() => {
-    void carregarPagina();
-  }, []);
-
-  async function carregarPagina() {
-    try {
-      setLoadingInicial(true);
-      setErro(null);
-
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (authError) {
-        throw authError;
-      }
-
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: perfilData, error: perfilError } = await supabase
-        .from("usuarios")
-        .select("id, user_id, nome, email, role, corretora_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (perfilError) {
-        throw perfilError;
-      }
-
-      if (!perfilData) {
-        throw new Error(
-          "Seu usuário não está vinculado à tabela usuarios. Cadastre ou vincule este login antes de criar cotações."
-        );
-      }
-
-      setPerfil(perfilData);
-
-      if (!perfilData.corretora_id) {
-        throw new Error(
-          "Este usuário ainda não está vinculado a nenhuma corretora."
-        );
-      }
-
-      const { data: corretoraData, error: corretoraError } = await supabase
-        .from("corretoras")
-        .select("id, nome_fantasia, razao_social")
-        .eq("id", perfilData.corretora_id)
-        .maybeSingle();
-
-      if (corretoraError) {
-        throw corretoraError;
-      }
-
-      setCorretora(corretoraData ?? null);
-
-      const { data: clientesData, error: clientesError } = await supabase
-        .from("clientes")
-        .select(
-          "id, corretora_id, usuario_id, tipo_pessoa, nome, documento, cpf_cnpj, telefone, email, cidade, estado, status, ativo, excluido"
-        )
-        .eq("corretora_id", perfilData.corretora_id)
-        .eq("excluido", false)
-        .order("nome", { ascending: true });
-
-      if (clientesError) {
-        throw clientesError;
-      }
-
-      const clientesAtivos = (clientesData ?? []).filter((item) => item.ativo !== false);
-      setClientes(clientesAtivos);
-    } catch (error: any) {
-      setErro(error?.message ?? "Não foi possível carregar a tela de nova cotação.");
-    } finally {
-      setLoadingInicial(false);
-    }
+  function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  const clientesFiltrados = useMemo(() => {
-    const termo = normalizarTexto(buscaCliente);
-    const termoDigitos = somenteDigitos(buscaCliente);
-
-    if (!termo && !termoDigitos) {
-      return clientes.slice(0, 12);
-    }
-
-    return clientes
-      .filter((cliente) => {
-        const camposTexto = [
-          cliente.nome,
-          cliente.documento,
-          cliente.cpf_cnpj,
-          cliente.email,
-          cliente.telefone,
-          cliente.cidade,
-          cliente.estado,
-          cliente.status,
-        ]
-          .map((item) => normalizarTexto(item))
-          .join(" ");
-
-        const camposDigitos = [
-          cliente.documento,
-          cliente.cpf_cnpj,
-          cliente.telefone,
-        ]
-          .map((item) => somenteDigitos(item))
-          .join(" ");
-
-        const bateTexto = termo ? camposTexto.includes(termo) : false;
-        const bateDigito = termoDigitos ? camposDigitos.includes(termoDigitos) : false;
-
-        return bateTexto || bateDigito;
-      })
-      .slice(0, 20);
-  }, [buscaCliente, clientes]);
-
-  function selecionarCliente(cliente: Cliente) {
-    setClienteSelecionado(cliente);
-    setForm((prev) => ({
-      ...prev,
-      cliente_id: cliente.id,
-    }));
-    setBuscaCliente(cliente.nome ?? "");
-    setSucesso(null);
-    setErro(null);
-  }
-
-  function limparCliente() {
-    setClienteSelecionado(null);
-    setBuscaCliente("");
-    setForm((prev) => ({
-      ...prev,
-      cliente_id: "",
-    }));
-  }
-
-  async function salvarCotacao(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setErro("");
+    setSucesso("");
+
+    if (
+      !form.clienteId.trim() ||
+      !form.corretoraId.trim() ||
+      !form.tipoSeguro.trim() ||
+      !form.seguradora.trim()
+    ) {
+      setErro("Preencha os campos obrigatórios para salvar a cotação.");
+      return;
+    }
+
+    setSalvando(true);
 
     try {
-      setSalvando(true);
-      setErro(null);
-      setSucesso(null);
+      const response = await fetch("/api/cotacoes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cliente_id: form.clienteId.trim(),
+          corretora_id: form.corretoraId.trim(),
+          tipo_seguro: form.tipoSeguro.trim(),
+          seguradora: form.seguradora.trim(),
+          premio_estimado: form.premioEstimado ? Number(form.premioEstimado) : null,
+          cobertura_oferecida: form.coberturaOferecida.trim() || null,
+          observacoes: form.observacoes.trim() || null,
+          atividade_principal: form.atividadePrincipal.trim() || null,
+        }),
+      });
 
-      if (!perfil?.id) {
-        throw new Error("Usuário responsável não encontrado.");
-      }
+      const data = await response.json();
 
-      if (!perfil?.corretora_id) {
-        throw new Error("Corretora do usuário não encontrada.");
-      }
-
-      if (!form.cliente_id || !clienteSelecionado) {
-        throw new Error("Selecione um cliente antes de salvar a cotação.");
-      }
-
-      const payload = {
-        corretora_id: perfil.corretora_id,
-        cliente_id: form.cliente_id,
-        usuario_id: perfil.id,
-        status: form.status,
-        observacoes: form.observacoes?.trim() || null,
-      };
-
-      const { data, error } = await supabase
-        .from("cotacoes")
-        .insert(payload)
-        .select("id")
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      setSucesso("Cotação criada com sucesso.");
-
-      if (data?.id) {
-        router.push(`/cotacoes/${data.id}`);
+      if (!response.ok) {
+        setErro(data?.error || "Não foi possível salvar a cotação.");
         return;
       }
 
-      router.push("/cotacoes");
-    } catch (error: any) {
-      setErro(error?.message ?? "Não foi possível salvar a cotação.");
+      setSucesso("Cotação salva com sucesso no banco.");
+      setForm(initialForm);
+    } catch {
+      setErro("Erro de conexão ao salvar a cotação.");
     } finally {
       setSalvando(false);
     }
   }
 
-  if (loadingInicial) {
-    return (
-      <div className="min-h-screen bg-[#0b1020] text-white px-6 py-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <p className="text-sm text-white/70">Carregando nova cotação...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#0b1020] text-white px-4 py-6 md:px-6 md:py-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-              Nova cotação
-            </h1>
-            <p className="mt-1 text-sm text-white/70">
-              Selecione o cliente correto antes de iniciar a análise.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => router.push("/cotacoes")}
-            className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-5 text-sm font-medium text-white transition hover:bg-white/10"
-          >
-            Voltar
-          </button>
-        </div>
-
-        {erro && (
-          <div className="mb-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-            {erro}
-          </div>
-        )}
-
-        {sucesso && (
-          <div className="mb-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-            {sucesso}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
-            <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-5 md:p-6">
-              <div className="mb-5 flex flex-col gap-2">
-                <h2 className="text-lg font-semibold">1. Buscar cliente</h2>
-                <p className="text-sm text-white/65">
-                  Busque por nome, CPF, CNPJ, documento, email ou telefone.
-                </p>
+    <SegmaxShell
+      title="Nova cotação"
+      subtitle="Registre a demanda comercial já no formato correto do banco para transformar a operação visual em fluxo real."
+      badge="Fluxo comercial SegMax"
+      username="Renato"
+      userrole="Super Master"
+      menuitems={menuItems}
+      actions={
+        <ActionButton
+          href="/cotacoes"
+          label="Voltar para cotações"
+          icon={<ArrowLeft size={18} />}
+        />
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.9fr]">
+          <SectionCard>
+            <div className="flex items-center gap-3 border-b border-white/8 pb-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#d4af37]/20 bg-[#d4af37]/8 text-[#d4af37]">
+                <FileText size={20} />
               </div>
 
-              <div className="mb-4">
-                <label className="mb-2 block text-sm font-medium text-white/80">
-                  Buscar cliente
-                </label>
-                <input
-                  type="text"
-                  value={buscaCliente}
-                  onChange={(e) => {
-                    setBuscaCliente(e.target.value);
-                    if (clienteSelecionado && e.target.value !== (clienteSelecionado.nome ?? "")) {
-                      setClienteSelecionado(null);
-                      setForm((prev) => ({ ...prev, cliente_id: "" }));
-                    }
-                  }}
-                  placeholder="Digite nome, CPF, CNPJ, telefone ou email"
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#0f172a] px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-cyan-400/60"
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight text-white">
+                  Dados reais da cotação
+                </h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Esta versão já grava diretamente na tabela <span className="text-white">cotacoes</span>.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <FieldLabel>Cliente ID</FieldLabel>
+                <Input
+                  value={form.clienteId}
+                  onChange={(e) => updateField("clienteId", e.target.value)}
+                  placeholder="UUID do cliente"
                 />
               </div>
 
-              <div className="max-h-[420px] overflow-y-auto rounded-2xl border border-white/10 bg-[#0b1327]">
-                {clientesFiltrados.length === 0 ? (
-                  <div className="px-4 py-6 text-sm text-white/60">
-                    Nenhum cliente encontrado com essa busca.
-                  </div>
-                ) : (
-                  clientesFiltrados.map((cliente) => {
-                    const selecionado = clienteSelecionado?.id === cliente.id;
-
-                    return (
-                      <button
-                        key={cliente.id}
-                        type="button"
-                        onClick={() => selecionarCliente(cliente)}
-                        className={`flex w-full flex-col gap-2 border-b border-white/5 px-4 py-4 text-left transition last:border-b-0 ${
-                          selecionado
-                            ? "bg-cyan-500/15"
-                            : "hover:bg-white/5"
-                        }`}
-                      >
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <div className="text-sm font-semibold text-white">
-                              {cliente.nome || "Cliente sem nome"}
-                            </div>
-                            <div className="mt-1 text-xs text-white/60">
-                              {cliente.tipo_pessoa?.toUpperCase() || "N/D"}
-                              {" • "}
-                              {formatarDocumento(cliente.cpf_cnpj || cliente.documento) || "Sem documento"}
-                            </div>
-                          </div>
-
-                          <div className="text-xs text-white/55">
-                            {cliente.status || "sem status"}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/55">
-                          <span>{cliente.email || "Sem email"}</span>
-                          <span>{cliente.telefone || "Sem telefone"}</span>
-                          <span>
-                            {[cliente.cidade, cliente.estado].filter(Boolean).join(" / ") || "Sem localização"}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })
-                )}
+              <div>
+                <FieldLabel>Corretora ID</FieldLabel>
+                <Input
+                  value={form.corretoraId}
+                  onChange={(e) => updateField("corretoraId", e.target.value)}
+                  placeholder="UUID da corretora"
+                />
               </div>
+
+              <div>
+                <FieldLabel>Tipo de seguro</FieldLabel>
+                <Select
+                  value={form.tipoSeguro}
+                  onChange={(e) => updateField("tipoSeguro", e.target.value)}
+                >
+                  <option value="" className="bg-black text-white">
+                    Selecione
+                  </option>
+                  <option value="Patrimonial Empresarial" className="bg-black text-white">
+                    Patrimonial Empresarial
+                  </option>
+                  <option value="Patrimonial Industrial" className="bg-black text-white">
+                    Patrimonial Industrial
+                  </option>
+                  <option value="Patrimonial Comercial" className="bg-black text-white">
+                    Patrimonial Comercial
+                  </option>
+                  <option value="Condomínio" className="bg-black text-white">
+                    Condomínio
+                  </option>
+                  <option value="Responsabilidade Civil" className="bg-black text-white">
+                    Responsabilidade Civil
+                  </option>
+                </Select>
+              </div>
+
+              <div>
+                <FieldLabel>Seguradora</FieldLabel>
+                <Input
+                  value={form.seguradora}
+                  onChange={(e) => updateField("seguradora", e.target.value)}
+                  placeholder="Ex.: Porto Seguro"
+                />
+              </div>
+
+              <div>
+                <FieldLabel>Prêmio estimado</FieldLabel>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.premioEstimado}
+                  onChange={(e) => updateField("premioEstimado", e.target.value)}
+                  placeholder="Ex.: 48000"
+                />
+              </div>
+
+              <div>
+                <FieldLabel>Atividade principal</FieldLabel>
+                <Input
+                  value={form.atividadePrincipal}
+                  onChange={(e) => updateField("atividadePrincipal", e.target.value)}
+                  placeholder="Ex.: Logística"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <FieldLabel>Cobertura oferecida</FieldLabel>
+                <Input
+                  value={form.coberturaOferecida}
+                  onChange={(e) => updateField("coberturaOferecida", e.target.value)}
+                  placeholder="Ex.: incêndio, danos elétricos, vendaval, RC"
+                />
+              </div>
+            </div>
+          </SectionCard>
+
+          <div className="space-y-6">
+            <SectionCard>
+              <div className="flex items-center gap-3 border-b border-white/8 pb-5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-300">
+                  <CheckCircle2 size={20} />
+                </div>
+
+                <div>
+                  <h2 className="text-xl font-semibold tracking-tight text-white">
+                    Resumo do envio
+                  </h2>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Conferência rápida antes de gravar.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                    Cliente ID
+                  </p>
+                  <p className="mt-2 break-all text-sm font-medium text-white">
+                    {form.clienteId || "Não definido"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                    Corretora ID
+                  </p>
+                  <p className="mt-2 break-all text-sm font-medium text-white">
+                    {form.corretoraId || "Não definido"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                    Tipo
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-white">
+                    {form.tipoSeguro || "Não definido"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                    Seguradora
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-white">
+                    {form.seguradora || "Não definida"}
+                  </p>
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard>
+              <div className="flex items-center gap-3 border-b border-white/8 pb-5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
+                  <AlertCircle size={20} />
+                </div>
+
+                <div>
+                  <h2 className="text-xl font-semibold tracking-tight text-white">
+                    Observação importante
+                  </h2>
+                </div>
+              </div>
+
+              <p className="mt-5 text-sm leading-7 text-zinc-400">
+                Nesta etapa, os campos <span className="text-white">Cliente ID</span> e{" "}
+                <span className="text-white">Corretora ID</span> precisam receber os UUIDs reais
+                do banco. No próximo bloco eu amarro isso com seleção automática de cliente e
+                corretora para você não digitar UUID manualmente.
+              </p>
+            </SectionCard>
+          </div>
+        </div>
+
+        <SectionCard>
+          <div className="flex items-center gap-3 border-b border-white/8 pb-5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+              <ShieldCheck size={20} />
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
+                Observações
+              </h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                Registre pontos técnicos e comerciais relevantes.
+              </p>
             </div>
           </div>
 
-          <div className="xl:col-span-1">
-            <form
-              onSubmit={salvarCotacao}
-              className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-5 md:p-6"
-            >
-              <div className="mb-5">
-                <h2 className="text-lg font-semibold">2. Dados da cotação</h2>
-                <p className="mt-1 text-sm text-white/65">
-                  Revise o cliente escolhido e crie a cotação.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-[#0f172a] p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-white/45">
-                    Corretora
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-white">
-                    {corretora?.nome_fantasia ||
-                      corretora?.razao_social ||
-                      "Corretora não encontrada"}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-[#0f172a] p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-white/45">
-                    Responsável
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-white">
-                    {perfil?.nome || perfil?.email || "Usuário sem nome"}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-[#0f172a] p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">
-                      Cliente selecionado
-                    </div>
-
-                    {clienteSelecionado && (
-                      <button
-                        type="button"
-                        onClick={limparCliente}
-                        className="text-xs font-medium text-red-300 transition hover:text-red-200"
-                      >
-                        Limpar
-                      </button>
-                    )}
-                  </div>
-
-                  {clienteSelecionado ? (
-                    <div className="space-y-2">
-                      <div className="text-sm font-semibold text-white">
-                        {clienteSelecionado.nome || "Cliente sem nome"}
-                      </div>
-                      <div className="text-xs text-white/60">
-                        {clienteSelecionado.tipo_pessoa?.toUpperCase() || "N/D"}
-                        {" • "}
-                        {formatarDocumento(
-                          clienteSelecionado.cpf_cnpj || clienteSelecionado.documento
-                        ) || "Sem documento"}
-                      </div>
-                      <div className="text-xs text-white/55">
-                        {clienteSelecionado.email || "Sem email"}
-                      </div>
-                      <div className="text-xs text-white/55">
-                        {clienteSelecionado.telefone || "Sem telefone"}
-                      </div>
-                      <div className="text-xs text-white/55">
-                        {[clienteSelecionado.cidade, clienteSelecionado.estado]
-                          .filter(Boolean)
-                          .join(" / ") || "Sem localização"}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-white/55">
-                      Nenhum cliente selecionado.
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-white/80">
-                    Status inicial
-                  </label>
-                  <select
-                    value={form.status}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, status: e.target.value }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-[#0f172a] px-4 text-sm text-white outline-none transition focus:border-cyan-400/60"
-                  >
-                    {STATUS_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-white/80">
-                    Observações
-                  </label>
-                  <textarea
-                    value={form.observacoes}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        observacoes: e.target.value,
-                      }))
-                    }
-                    rows={5}
-                    placeholder="Escreva aqui algum detalhe inicial desta cotação"
-                    className="w-full rounded-2xl border border-white/10 bg-[#0f172a] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-cyan-400/60"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={salvando || !clienteSelecionado}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-cyan-500 px-5 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {salvando ? "Salvando cotação..." : "Criar cotação"}
-                </button>
-              </div>
-            </form>
+          <div className="mt-6">
+            <FieldLabel>Observações gerais</FieldLabel>
+            <TextArea
+              rows={7}
+              value={form.observacoes}
+              onChange={(e) => updateField("observacoes", e.target.value)}
+              placeholder="Descreva risco, contexto comercial, urgência, proteções existentes e informações importantes para a análise."
+            />
           </div>
-        </div>
-      </div>
-    </div>
+
+          {erro ? (
+            <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {erro}
+            </div>
+          ) : null}
+
+          {sucesso ? (
+            <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+              {sucesso}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={salvando}
+              className="inline-flex items-center gap-2 rounded-2xl border border-[#d4af37] bg-[#d4af37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <Save size={18} />
+              {salvando ? "Salvando..." : "Salvar cotação no banco"}
+            </button>
+
+            <Link
+              href="/cotacoes"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.05]"
+            >
+              Cancelar
+            </Link>
+          </div>
+        </SectionCard>
+      </form>
+    </SegmaxShell>
   );
 }
