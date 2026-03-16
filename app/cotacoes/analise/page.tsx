@@ -1,862 +1,655 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { calcularCotacao } from "@/lib/motorcotacao";
-
-type Cotacao = {
-  id: string;
-  corretora_id: string | null;
-  usuario_id: string | null;
-  cliente_id: string | null;
-  produto: string | null;
-  numero_proposta: string | null;
-  renovacao: boolean;
-  inicio_vigencia: string | null;
-  fim_vigencia: string | null;
-  moeda: string | null;
-  taxa_cambio: number | null;
-  atividade_principal: string | null;
-  endereco_risco: string | null;
-  cidade_risco: string | null;
-  estado_risco: string | null;
-  classe_construtiva: string | null;
-  combustibilidade: string | null;
-  hazard_grade: string | null;
-  damageability: string | null;
-  bottleneck: string | null;
-  quality_grade: string | null;
-  periodo_indenitario: string | null;
-  historico_sinistro: string | null;
-  medidas_prevencao: string | null;
-  documentos_recebidos: string | null;
-  declaracao_risco: string | null;
-  observacoes_tecnicas: string | null;
-  observacoes_comerciais: string | null;
-  status: string | null;
-  created_at: string | null;
-};
-
-type Corretora = {
-  id: string;
-  nome_fantasia: string | null;
-};
-
-type Usuario = {
-  id: string;
-  nome: string | null;
-};
+import {
+  getQuestionnaireSections,
+  QuestionnaireType,
+  RiskQuestion,
+} from "@/lib/risk-questionnaires";
 
 type Cliente = {
   id: string;
   nome: string | null;
 };
 
-type ResultadoPlano = {
-  seguradora_id: string;
-  plano_id: string;
-  nome_plano: string;
-  taxa: number;
-  comissao: number | null;
-  status: string;
-};
+type FormState = Record<string, string>;
 
-type AnaliseRisco = {
-  score: number;
-  nivel: "baixo" | "moderado" | "alto" | "critico";
-  fatores: string[];
-  recomendacao: string;
-};
+export default function AnalisePage() {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clienteSelecionado, setClienteSelecionado] = useState("");
+  const [analysisId, setAnalysisId] = useState("");
+  const [tipoQuestionario, setTipoQuestionario] =
+    useState<QuestionnaireType>("middle");
 
-export default function AnaliseCotacaoPage() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
+  const [carregandoClientes, setCarregandoClientes] = useState(true);
+  const [criandoAnalise, setCriandoAnalise] = useState(false);
+  const [salvandoRespostas, setSalvandoRespostas] = useState(false);
+  const [calculandoRisco, setCalculandoRisco] = useState(false);
 
-  const cotacaoId = searchParams.get("cotacao_id") || "";
+  const secoes = useMemo(
+    () => getQuestionnaireSections(tipoQuestionario),
+    [tipoQuestionario]
+  );
 
-  const [cotacao, setCotacao] = useState<Cotacao | null>(null);
-  const [corretora, setCorretora] = useState<Corretora | null>(null);
-  const [usuario, setUsuario] = useState<Usuario | null>(null);
-  const [cliente, setCliente] = useState<Cliente | null>(null);
-  const [resultados, setResultados] = useState<ResultadoPlano[]>([]);
-  const [loading, setLoading] = useState(true);
+  const perguntas = useMemo(
+    () => secoes.flatMap((secao) => secao.perguntas),
+    [secoes]
+  );
 
-  function textoContem(texto: string | null | undefined, palavras: string[]) {
-    if (!texto) return false;
-    const base = texto.toLowerCase();
-    return palavras.some((p) => base.includes(p.toLowerCase()));
-  }
+  const [form, setForm] = useState<FormState>({});
 
-  function extrairNumero(texto: string | null | undefined): number | null {
-    if (!texto) return null;
-    const match = String(texto).match(/\d+/);
-    if (!match) return null;
-    const numero = Number(match[0]);
-    return Number.isNaN(numero) ? null : numero;
-  }
+  useEffect(() => {
+    carregarClientes();
+  }, []);
 
-  function calcularScoreRisco(dados: Cotacao): AnaliseRisco {
-    let score = 0;
-    const fatores: string[] = [];
-
-    const estado = (dados.estado_risco || "").toUpperCase();
-    const classe = (dados.classe_construtiva || "").toLowerCase();
-    const combust = (dados.combustibilidade || "").toLowerCase();
-    const hazard = (dados.hazard_grade || "").toLowerCase();
-    const damage = (dados.damageability || "").toLowerCase();
-    const bottleneck = (dados.bottleneck || "").toLowerCase();
-    const quality = (dados.quality_grade || "").toLowerCase();
-    const sinistrosNumero = extrairNumero(dados.historico_sinistro);
-
-    if (dados.renovacao) {
-      score += 5;
-      fatores.push("Cotação de renovação.");
-    } else {
-      score += 10;
-      fatores.push("Negócio novo.");
-    }
-
-    if (textoContem(classe, ["madeira", "mista", "combustível"])) {
-      score += 25;
-      fatores.push("Classe construtiva com maior exposição.");
-    } else if (classe) {
-      score += 8;
-      fatores.push("Classe construtiva informada.");
-    }
-
-    if (textoContem(combust, ["alta", "elevada", "inflam", "combust"])) {
-      score += 25;
-      fatores.push("Combustibilidade elevada.");
-    } else if (combust) {
-      score += 8;
-      fatores.push("Combustibilidade informada.");
-    }
-
-    if (textoContem(hazard, ["alto", "high", "severo"])) {
-      score += 25;
-      fatores.push("Hazard grade alto.");
-    } else if (hazard) {
-      score += 8;
-      fatores.push("Hazard grade informado.");
-    }
-
-    if (textoContem(damage, ["alto", "high", "severo"])) {
-      score += 18;
-      fatores.push("Damageability elevado.");
-    } else if (damage) {
-      score += 6;
-      fatores.push("Damageability informado.");
-    }
-
-    if (textoContem(bottleneck, ["alto", "high", "crítico", "critico"])) {
-      score += 15;
-      fatores.push("Dependência operacional elevada.");
-    } else if (bottleneck) {
-      score += 5;
-      fatores.push("Bottleneck informado.");
-    }
-
-    if (textoContem(quality, ["baixo", "low", "ruim"])) {
-      score += 15;
-      fatores.push("Quality grade desfavorável.");
-    } else if (quality) {
-      score += 5;
-      fatores.push("Quality grade informado.");
-    }
-
-    if (sinistrosNumero !== null) {
-      if (sinistrosNumero >= 3) {
-        score += 30;
-        fatores.push("Histórico de sinistros elevado.");
-      } else if (sinistrosNumero >= 1) {
-        score += 15;
-        fatores.push("Há histórico de sinistros.");
+  useEffect(() => {
+    const inicial: FormState = {};
+    perguntas.forEach((p) => {
+      if (p.tipo === "select" && p.opcoes?.length) {
+        inicial[p.codigo] = p.opcoes[0].value;
       } else {
-        score += 3;
-        fatores.push("Sem sinistros relevantes informados.");
+        inicial[p.codigo] = "";
       }
-    }
+    });
+    setForm(inicial);
+  }, [tipoQuestionario, perguntas]);
 
-    if (!dados.documentos_recebidos || dados.documentos_recebidos.trim() === "") {
-      score += 12;
-      fatores.push("Documentação não detalhada.");
-    } else {
-      score += 3;
-      fatores.push("Documentação recebida informada.");
-    }
+  async function carregarClientes() {
+    setCarregandoClientes(true);
 
-    if (!dados.medidas_prevencao || dados.medidas_prevencao.trim() === "") {
-      score += 12;
-      fatores.push("Medidas de prevenção não detalhadas.");
-    } else {
-      score += 2;
-      fatores.push("Há medidas de prevenção informadas.");
-    }
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("id, nome")
+      .eq("excluido", false)
+      .order("nome", { ascending: true });
 
-    if (["SP", "RJ", "MG", "PR", "SC", "RS"].includes(estado)) {
-      score += 4;
-      fatores.push("Praça com mercado segurador ativo.");
-    } else if (estado) {
-      score += 7;
-      fatores.push("Estado informado para análise.");
-    }
-
-    if (textoContem(dados.atividade_principal, ["industr", "quimic", "metal", "plast", "têxtil", "textil"])) {
-      score += 20;
-      fatores.push("Atividade principal com perfil industrial.");
-    } else if (textoContem(dados.atividade_principal, ["comércio", "comercio", "escrit", "servi"])) {
-      score += 8;
-      fatores.push("Atividade principal com risco moderado.");
-    } else if (dados.atividade_principal) {
-      score += 10;
-      fatores.push("Atividade principal informada.");
-    }
-
-    if (score < 30) {
-      return {
-        score,
-        nivel: "baixo",
-        fatores,
-        recomendacao: "Risco favorável. Mercado tende a aceitar com mais competitividade.",
-      };
-    }
-
-    if (score < 60) {
-      return {
-        score,
-        nivel: "moderado",
-        fatores,
-        recomendacao: "Risco moderado. Vale comparar seguradoras com regras mais flexíveis.",
-      };
-    }
-
-    if (score < 90) {
-      return {
-        score,
-        nivel: "alto",
-        fatores,
-        recomendacao: "Risco alto. Importante reforçar prevenção e documentação.",
-      };
-    }
-
-    return {
-      score,
-      nivel: "critico",
-      fatores,
-      recomendacao: "Risco crítico. Mercado pode restringir aceitação ou majorar bastante a taxa.",
-    };
-  }
-
-  async function carregarAnalise() {
-    if (!cotacaoId) {
-      alert("Cotação não informada.");
+    if (error) {
+      alert("Erro ao carregar clientes: " + error.message);
+      setCarregandoClientes(false);
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const { data: cotacaoData, error: cotacaoError } = await supabase
-        .from("cotacoes")
-        .select("*")
-        .eq("id", cotacaoId)
-        .maybeSingle();
-
-      if (cotacaoError) {
-        alert(`Erro ao carregar cotação: ${cotacaoError.message}`);
-        setLoading(false);
-        return;
-      }
-
-      if (!cotacaoData) {
-        alert("Cotação não encontrada.");
-        setLoading(false);
-        return;
-      }
-
-      setCotacao(cotacaoData);
-
-      const [
-        { data: corretoraData },
-        { data: usuarioData },
-        { data: clienteData },
-      ] = await Promise.all([
-        cotacaoData.corretora_id
-          ? supabase
-              .from("corretoras")
-              .select("id, nome_fantasia")
-              .eq("id", cotacaoData.corretora_id)
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
-        cotacaoData.usuario_id
-          ? supabase
-              .from("usuarios")
-              .select("id, nome")
-              .eq("id", cotacaoData.usuario_id)
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
-        cotacaoData.cliente_id
-          ? supabase
-              .from("clientes")
-              .select("id, nome")
-              .eq("id", cotacaoData.cliente_id)
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
-      ]);
-
-      setCorretora(corretoraData || null);
-      setUsuario(usuarioData || null);
-      setCliente(clienteData || null);
-
-      const retornoMotor = await calcularCotacao(cotacaoId);
-      setResultados(retornoMotor || []);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Erro inesperado ao carregar análise.";
-      alert(message);
-    } finally {
-      setLoading(false);
-    }
+    setClientes(data || []);
+    setCarregandoClientes(false);
   }
 
-  useEffect(() => {
-    carregarAnalise();
-  }, []);
+  function atualizarCampo(codigo: string, valor: string) {
+    setForm((prev) => ({
+      ...prev,
+      [codigo]: valor,
+    }));
+  }
 
-  const analise = useMemo(() => {
-    if (!cotacao) return null;
-    return calcularScoreRisco(cotacao);
-  }, [cotacao]);
+  function calcularPontos(pergunta: RiskQuestion, valor: string) {
+    if (pergunta.tipo === "select") {
+      const opcao = pergunta.opcoes?.find((o) => o.value === valor);
+      return opcao?.pontos ?? 0;
+    }
 
-  const melhorProposta = useMemo(() => {
-    if (!resultados.length) return null;
-    return resultados[0];
-  }, [resultados]);
+    if (pergunta.tipo === "number") {
+      const numero = Number(valor || 0);
 
-  function formatarData(data: string | null) {
-    if (!data) return "-";
+      if (pergunta.codigo.includes("distancia_bombeiros")) {
+        if (numero <= 5) return 1;
+        if (numero <= 15) return 3;
+        if (numero <= 30) return 6;
+        return 9;
+      }
+
+      return numero > 0 ? 2 : 0;
+    }
+
+    if (pergunta.tipo === "multiselect") {
+      const itens = valor ? valor.split("|").filter(Boolean) : [];
+      const totalOpcoes = pergunta.opcoes?.length || 1;
+      const faltantes = totalOpcoes - itens.length;
+
+      if (faltantes <= 0) return 1;
+      if (faltantes === 1) return 3;
+      if (faltantes === 2) return 5;
+      return 8;
+    }
+
+    if (pergunta.tipo === "text" || pergunta.tipo === "textarea" || pergunta.tipo === "date") {
+      return valor?.trim() ? 1 : 4;
+    }
+
+    return 0;
+  }
+
+  function validarObrigatorias() {
+    const faltando = perguntas.filter(
+      (p) => p.obrigatoria && !String(form[p.codigo] || "").trim()
+    );
+
+    if (faltando.length > 0) {
+      alert(`Preencha os campos obrigatórios. Primeiro pendente: ${faltando[0].titulo}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  async function criarAnalise() {
+    if (!clienteSelecionado) {
+      alert("Selecione um cliente antes de criar a análise.");
+      return;
+    }
+
+    setCriandoAnalise(true);
+
+    const titulo =
+      tipoQuestionario === "middle"
+        ? "Análise patrimonial - Middle"
+        : "Análise patrimonial - Grandes Riscos";
+
+    const { data, error } = await supabase
+      .from("risk_analyses")
+      .insert({
+        cliente_id: clienteSelecionado,
+        titulo,
+        tipo_analise: tipoQuestionario,
+        status: "em_analise",
+        observacoes: `Questionário técnico ${tipoQuestionario}`,
+      })
+      .select()
+      .single();
+
+    setCriandoAnalise(false);
+
+    if (error) {
+      alert("Erro ao criar análise: " + error.message);
+      return;
+    }
+
+    setAnalysisId(data.id);
+    alert("Análise criada com sucesso.");
+  }
+
+  async function salvarRespostas() {
+    if (!analysisId) {
+      alert("Crie a análise primeiro.");
+      return;
+    }
+
+    if (!validarObrigatorias()) {
+      return;
+    }
+
+    setSalvandoRespostas(true);
+
+    const { error: deleteError } = await supabase
+      .from("risk_analysis_answers")
+      .delete()
+      .eq("analysis_id", analysisId);
+
+    if (deleteError) {
+      setSalvandoRespostas(false);
+      alert("Erro ao limpar respostas anteriores: " + deleteError.message);
+      return;
+    }
+
+    const respostas = perguntas.map((pergunta) => {
+      const valor = form[pergunta.codigo] || "";
+      const pontos = calcularPontos(pergunta, valor);
+
+      return {
+        analysis_id: analysisId,
+        codigo_pergunta: pergunta.codigo,
+        pergunta: pergunta.titulo,
+        resposta_valor: valor,
+        resposta_label: valor,
+        resposta_numero:
+          pergunta.tipo === "number" ? Number(valor || 0) : null,
+        peso: pergunta.peso,
+        pontos,
+        categoria: pergunta.categoria,
+      };
+    });
+
+    const { error } = await supabase
+      .from("risk_analysis_answers")
+      .insert(respostas);
+
+    setSalvandoRespostas(false);
+
+    if (error) {
+      alert("Erro ao salvar respostas: " + error.message);
+      return;
+    }
+
+    alert("Respostas salvas com sucesso.");
+  }
+
+  async function calcularRisco() {
+    if (!analysisId) {
+      alert("Crie a análise primeiro.");
+      return;
+    }
+
+    setCalculandoRisco(true);
 
     try {
-      return new Date(data).toLocaleDateString("pt-BR");
+      const res = await fetch("/api/risk-engine/analisar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ analysisId }),
+      });
+
+      const json = await res.json();
+
+      if (!json.ok) {
+        alert("Erro ao calcular risco: " + (json.error || "Erro desconhecido"));
+        setCalculandoRisco(false);
+        return;
+      }
+
+      window.location.href = `/cotacoes/resultado/${analysisId}`;
     } catch {
-      return "-";
+      alert("Erro ao calcular risco.");
+      setCalculandoRisco(false);
     }
-  }
-
-  function formatarNumero(valor: number | null | undefined) {
-    if (valor === null || valor === undefined) return "-";
-    return valor.toFixed(2);
-  }
-
-  function corNivel(nivel: AnaliseRisco["nivel"] | undefined): React.CSSProperties {
-    if (nivel === "baixo") {
-      return {
-        background: "#dcfce7",
-        color: "#166534",
-        border: "1px solid #86efac",
-      };
-    }
-
-    if (nivel === "moderado") {
-      return {
-        background: "#fef3c7",
-        color: "#92400e",
-        border: "1px solid #fcd34d",
-      };
-    }
-
-    if (nivel === "alto") {
-      return {
-        background: "#fee2e2",
-        color: "#b91c1c",
-        border: "1px solid #fca5a5",
-      };
-    }
-
-    return {
-      background: "#ede9fe",
-      color: "#6d28d9",
-      border: "1px solid #c4b5fd",
-    };
   }
 
   return (
-    <div style={pageStyle}>
-      <div style={headerRow}>
-        <div>
-          <h1 style={titleStyle}>Análise da Cotação</h1>
-          <p style={subtitleStyle}>
-            Visão técnica do risco e ranking automático das propostas.
-          </p>
-        </div>
+    <div
+      style={{
+        minHeight: "100vh",
+        background:
+          "radial-gradient(circle at top, rgba(180,140,40,0.12) 0%, rgba(0,0,0,1) 28%)",
+        color: "#ffffff",
+        padding: "32px 20px 60px",
+      }}
+    >
+      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+        <div
+          style={{
+            border: "1px solid rgba(212, 175, 55, 0.22)",
+            background: "rgba(8, 8, 8, 0.94)",
+            borderRadius: 24,
+            padding: 32,
+            boxShadow: "0 18px 60px rgba(0,0,0,0.45)",
+          }}
+        >
+          <div style={{ marginBottom: 28 }}>
+            <div
+              style={{
+                display: "inline-block",
+                padding: "8px 14px",
+                borderRadius: 999,
+                border: "1px solid rgba(212,175,55,0.35)",
+                background: "rgba(212,175,55,0.08)",
+                color: "#d4af37",
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              SegMax • Questionário Técnico Patrimonial
+            </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            style={primaryButton}
-            onClick={() =>
-              cotacaoId
-                ? router.push(`/cotacoes/resultado?cotacao_id=${cotacaoId}`)
-                : router.push("/cotacoes")
-            }
-          >
-            Ver Resultado
-          </button>
+            <h1
+              style={{
+                marginTop: 18,
+                marginBottom: 10,
+                fontSize: 34,
+                lineHeight: 1.1,
+                fontWeight: 800,
+              }}
+            >
+              Nova Análise de Risco
+            </h1>
 
-          <button
-            type="button"
-            style={secondaryButton}
-            onClick={() => router.push("/cotacoes")}
+            <p
+              style={{
+                margin: 0,
+                color: "rgba(255,255,255,0.72)",
+                fontSize: 16,
+                lineHeight: 1.6,
+                maxWidth: 820,
+              }}
+            >
+              O questionário agora está embutido no SegMax, com base técnica patrimonial
+              para Middle e Grandes Riscos.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.1fr 1fr 1fr",
+              gap: 20,
+              marginBottom: 26,
+            }}
           >
-            Voltar
-          </button>
+            <Painel titulo="Cliente">
+              <select
+                value={clienteSelecionado}
+                onChange={(e) => setClienteSelecionado(e.target.value)}
+                style={selectStyle}
+              >
+                <option value="">
+                  {carregandoClientes ? "Carregando clientes..." : "Selecione um cliente"}
+                </option>
+                {clientes.map((cliente) => (
+                  <option key={cliente.id} value={cliente.id}>
+                    {cliente.nome || "Sem nome"}
+                  </option>
+                ))}
+              </select>
+            </Painel>
+
+            <Painel titulo="Tipo de questionário">
+              <select
+                value={tipoQuestionario}
+                onChange={(e) =>
+                  setTipoQuestionario(e.target.value as QuestionnaireType)
+                }
+                style={selectStyle}
+              >
+                <option value="middle">Middle</option>
+                <option value="grandes_riscos">Grandes Riscos</option>
+              </select>
+            </Painel>
+
+            <Painel titulo="Status da análise">
+              <div
+                style={{
+                  color: analysisId ? "#ffffff" : "rgba(255,255,255,0.58)",
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                  wordBreak: "break-word",
+                }}
+              >
+                {analysisId
+                  ? `ID gerado: ${analysisId}`
+                  : "Crie a análise para liberar o salvamento das respostas e o cálculo do risco."}
+              </div>
+            </Painel>
+          </div>
+
+          <div style={{ marginBottom: 26 }}>
+            <button onClick={criarAnalise} disabled={criandoAnalise} style={primaryButton}>
+              {criandoAnalise ? "Criando análise..." : "Criar análise"}
+            </button>
+          </div>
+
+          {secoes.map((secao) => (
+            <div
+              key={secao.secao}
+              style={{
+                marginBottom: 22,
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 20,
+                padding: 24,
+                background: "linear-gradient(180deg, #101010 0%, #080808 100%)",
+              }}
+            >
+              <h2
+                style={{
+                  marginTop: 0,
+                  marginBottom: 18,
+                  fontSize: 22,
+                  color: "#ffffff",
+                }}
+              >
+                {secao.secao}
+              </h2>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 18,
+                }}
+              >
+                {secao.perguntas.map((pergunta) => (
+                  <CampoPergunta
+                    key={pergunta.codigo}
+                    pergunta={pergunta}
+                    valor={form[pergunta.codigo] || ""}
+                    onChange={(valor) => atualizarCampo(pergunta.codigo, valor)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div
+            style={{
+              display: "flex",
+              gap: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              onClick={salvarRespostas}
+              disabled={salvandoRespostas}
+              style={secondaryButton}
+            >
+              {salvandoRespostas ? "Salvando..." : "Salvar respostas"}
+            </button>
+
+            <button
+              onClick={calcularRisco}
+              disabled={calculandoRisco}
+              style={primaryButton}
+            >
+              {calculandoRisco ? "Calculando..." : "Calcular risco"}
+            </button>
+          </div>
         </div>
       </div>
-
-      {loading ? (
-        <div style={emptyBox}>Carregando análise...</div>
-      ) : !cotacao ? (
-        <div style={emptyBox}>Cotação não encontrada.</div>
-      ) : (
-        <>
-          <div style={cardsGrid}>
-            <ResumoCard
-              titulo="Score de risco"
-              valor={analise ? String(analise.score) : "-"}
-            />
-            <ResumoCard
-              titulo="Nível"
-              valor={analise ? analise.nivel.toUpperCase() : "-"}
-            />
-            <ResumoCard
-              titulo="Propostas elegíveis"
-              valor={String(resultados.length)}
-            />
-            <ResumoCard
-              titulo="Melhor taxa"
-              valor={melhorProposta ? formatarNumero(melhorProposta.taxa) : "-"}
-            />
-          </div>
-
-          <div style={gridMain}>
-            <div style={cardStyle}>
-              <h2 style={sectionTitle}>Dados principais</h2>
-
-              <div style={infoGrid}>
-                <InfoItem label="Corretora" value={corretora?.nome_fantasia || "-"} />
-                <InfoItem label="Usuário" value={usuario?.nome || "-"} />
-                <InfoItem label="Cliente" value={cliente?.nome || "-"} />
-                <InfoItem label="Produto" value={cotacao.produto || "-"} />
-                <InfoItem label="Proposta" value={cotacao.numero_proposta || "-"} />
-                <InfoItem label="Cadastro" value={formatarData(cotacao.created_at)} />
-                <InfoItem label="Início vigência" value={formatarData(cotacao.inicio_vigencia)} />
-                <InfoItem label="Fim vigência" value={formatarData(cotacao.fim_vigencia)} />
-                <InfoItem label="Cidade risco" value={cotacao.cidade_risco || "-"} />
-                <InfoItem label="Estado risco" value={cotacao.estado_risco || "-"} />
-                <InfoItem label="Classe construtiva" value={cotacao.classe_construtiva || "-"} />
-                <InfoItem label="Combustibilidade" value={cotacao.combustibilidade || "-"} />
-              </div>
-            </div>
-
-            <div style={cardStyle}>
-              <h2 style={sectionTitle}>Análise de risco</h2>
-
-              <div style={{ marginBottom: 14 }}>
-                <span style={{ ...badgeStyle, ...corNivel(analise?.nivel) }}>
-                  {analise?.nivel || "-"}
-                </span>
-              </div>
-
-              <div style={riskScoreBox}>
-                <div style={riskScoreLabel}>Score</div>
-                <div style={riskScoreValue}>{analise?.score ?? "-"}</div>
-              </div>
-
-              <div style={recommendationBox}>
-                {analise?.recomendacao || "-"}
-              </div>
-
-              <div style={{ marginTop: 16 }}>
-                <div style={miniTitle}>Fatores encontrados</div>
-
-                {!analise?.fatores.length ? (
-                  <div style={subtleText}>Nenhum fator relevante identificado.</div>
-                ) : (
-                  <div style={factorList}>
-                    {analise.fatores.map((fator, index) => (
-                      <div key={`${fator}-${index}`} style={factorItem}>
-                        {fator}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div style={cardStyle}>
-            <h2 style={sectionTitle}>Melhor proposta sugerida</h2>
-
-            {!melhorProposta ? (
-              <div style={emptyInline}>Nenhuma proposta elegível encontrada.</div>
-            ) : (
-              <div style={bestProposalBox}>
-                <div>
-                  <div style={bestProposalTitle}>{melhorProposta.nome_plano}</div>
-                  <div style={bestProposalSub}>
-                    Plano com menor taxa entre as propostas aceitas.
-                  </div>
-                </div>
-
-                <div style={bestProposalMetrics}>
-                  <MetricBox titulo="Taxa" valor={formatarNumero(melhorProposta.taxa)} />
-                  <MetricBox
-                    titulo="Comissão"
-                    valor={formatarNumero(melhorProposta.comissao)}
-                  />
-                  <MetricBox titulo="Status" valor={melhorProposta.status} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={cardStyle}>
-            <h2 style={sectionTitle}>Ranking das propostas</h2>
-
-            {!resultados.length ? (
-              <div style={emptyInline}>Nenhuma seguradora aceitou o risco.</div>
-            ) : (
-              <div style={tableWrapper}>
-                <table style={tableStyle}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>Ranking</th>
-                      <th style={thStyle}>Plano</th>
-                      <th style={thStyle}>Taxa</th>
-                      <th style={thStyle}>Comissão</th>
-                      <th style={thStyle}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resultados.map((item, index) => (
-                      <tr key={item.plano_id}>
-                        <td style={tdStyle}>#{index + 1}</td>
-                        <td style={tdStyle}>{item.nome_plano}</td>
-                        <td style={tdStyle}>{formatarNumero(item.taxa)}</td>
-                        <td style={tdStyle}>{formatarNumero(item.comissao)}</td>
-                        <td style={tdStyle}>{item.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
-      )}
     </div>
   );
 }
 
-function ResumoCard({ titulo, valor }: { titulo: string; valor: string }) {
+function CampoPergunta({
+  pergunta,
+  valor,
+  onChange,
+}: {
+  pergunta: RiskQuestion;
+  valor: string;
+  onChange: (valor: string) => void;
+}) {
+  const label = (
+    <label
+      style={{
+        display: "block",
+        marginBottom: 10,
+        color: "#d4af37",
+        fontWeight: 600,
+        fontSize: 14,
+      }}
+    >
+      {pergunta.titulo}
+      {pergunta.obrigatoria ? " *" : ""}
+    </label>
+  );
+
+  if (pergunta.tipo === "textarea") {
+    return (
+      <div style={fieldCard}>
+        {label}
+        <textarea
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={pergunta.placeholder || ""}
+          style={textareaStyle}
+        />
+      </div>
+    );
+  }
+
+  if (pergunta.tipo === "select") {
+    return (
+      <div style={fieldCard}>
+        {label}
+        <select value={valor} onChange={(e) => onChange(e.target.value)} style={selectStyle}>
+          {pergunta.opcoes?.map((opcao) => (
+            <option key={opcao.value} value={opcao.value}>
+              {opcao.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  if (pergunta.tipo === "multiselect") {
+    const selecionados = valor ? valor.split("|") : [];
+
+    function toggleItem(item: string) {
+      const existe = selecionados.includes(item);
+      const novo = existe
+        ? selecionados.filter((i) => i !== item)
+        : [...selecionados, item];
+
+      onChange(novo.join("|"));
+    }
+
+    return (
+      <div style={fieldCard}>
+        {label}
+        <div style={{ display: "grid", gap: 10 }}>
+          {pergunta.opcoes?.map((opcao) => {
+            const checked = selecionados.includes(opcao.value);
+            return (
+              <label
+                key={opcao.value}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  color: "#ffffff",
+                  fontSize: 14,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleItem(opcao.value)}
+                />
+                {opcao.label}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={summaryCard}>
-      <div style={summaryTitle}>{titulo}</div>
-      <div style={summaryValue}>{valor}</div>
+    <div style={fieldCard}>
+      {label}
+      <input
+        type={pergunta.tipo === "number" ? "number" : pergunta.tipo === "date" ? "date" : "text"}
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={pergunta.placeholder || ""}
+        style={inputStyle}
+      />
     </div>
   );
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
+function Painel({
+  titulo,
+  children,
+}: {
+  titulo: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div style={infoItem}>
-      <div style={infoLabel}>{label}</div>
-      <div style={infoValue}>{value}</div>
+    <div
+      style={{
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 18,
+        padding: 18,
+        background: "rgba(255,255,255,0.03)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          color: "rgba(255,255,255,0.6)",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          marginBottom: 10,
+        }}
+      >
+        {titulo}
+      </div>
+      {children}
     </div>
   );
 }
 
-function MetricBox({ titulo, valor }: { titulo: string; valor: string }) {
-  return (
-    <div style={metricBox}>
-      <div style={metricTitle}>{titulo}</div>
-      <div style={metricValue}>{valor}</div>
-    </div>
-  );
-}
-
-const pageStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 16,
+const fieldCard: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 18,
+  padding: 18,
+  background: "rgba(255,255,255,0.02)",
 };
 
-const headerRow: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap",
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 32,
-  color: "#111827",
-};
-
-const subtitleStyle: React.CSSProperties = {
-  margin: "6px 0 0 0",
-  color: "#6b7280",
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "14px 16px",
+  borderRadius: 14,
+  border: "1px solid rgba(212,175,55,0.22)",
+  background: "#050505",
+  color: "#ffffff",
+  outline: "none",
   fontSize: 15,
 };
 
-const cardsGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 12,
-};
-
-const summaryCard: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 16,
-  padding: 18,
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  border: "1px solid #eef2f7",
-};
-
-const summaryTitle: React.CSSProperties = {
-  fontSize: 14,
-  color: "#6b7280",
-  marginBottom: 8,
-};
-
-const summaryValue: React.CSSProperties = {
-  fontSize: 28,
-  fontWeight: 800,
-  color: "#111827",
-};
-
-const gridMain: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1.2fr 1fr",
-  gap: 16,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 16,
-  padding: 20,
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  border: "1px solid #eef2f7",
-};
-
-const sectionTitle: React.CSSProperties = {
-  margin: "0 0 16px 0",
-  fontSize: 20,
-  color: "#111827",
-};
-
-const infoGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: 12,
-};
-
-const infoItem: React.CSSProperties = {
-  background: "#f9fafb",
-  borderRadius: 12,
-  padding: 12,
-  border: "1px solid #eef2f7",
-};
-
-const infoLabel: React.CSSProperties = {
-  fontSize: 12,
-  color: "#6b7280",
-  marginBottom: 4,
-};
-
-const infoValue: React.CSSProperties = {
-  fontSize: 14,
-  fontWeight: 700,
-  color: "#111827",
-};
-
-const riskScoreBox: React.CSSProperties = {
-  background: "#f9fafb",
-  border: "1px solid #eef2f7",
-  borderRadius: 14,
-  padding: 16,
-  marginBottom: 14,
-};
-
-const riskScoreLabel: React.CSSProperties = {
-  fontSize: 13,
-  color: "#6b7280",
-};
-
-const riskScoreValue: React.CSSProperties = {
-  fontSize: 36,
-  fontWeight: 800,
-  color: "#111827",
-  marginTop: 4,
-};
-
-const recommendationBox: React.CSSProperties = {
-  background: "#eff6ff",
-  color: "#1e3a8a",
-  border: "1px solid #bfdbfe",
-  borderRadius: 12,
-  padding: 14,
-  fontSize: 14,
-  lineHeight: 1.5,
-};
-
-const miniTitle: React.CSSProperties = {
-  fontSize: 14,
-  fontWeight: 700,
-  color: "#111827",
-  marginBottom: 10,
-};
-
-const subtleText: React.CSSProperties = {
-  color: "#6b7280",
-  fontSize: 14,
-};
-
-const factorList: React.CSSProperties = {
-  display: "grid",
-  gap: 8,
-};
-
-const factorItem: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  background: "#f9fafb",
-  border: "1px solid #eef2f7",
-  color: "#111827",
-  fontSize: 14,
-};
-
-const badgeStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "6px 10px",
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 700,
-  textTransform: "capitalize",
-};
-
-const bestProposalBox: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 16,
-  flexWrap: "wrap",
-  background: "#f9fafb",
-  borderRadius: 14,
-  border: "1px solid #eef2f7",
-  padding: 16,
-};
-
-const bestProposalTitle: React.CSSProperties = {
-  fontSize: 18,
-  fontWeight: 800,
-  color: "#111827",
-};
-
-const bestProposalSub: React.CSSProperties = {
-  marginTop: 4,
-  fontSize: 14,
-  color: "#6b7280",
-};
-
-const bestProposalMetrics: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(120px, 1fr))",
-  gap: 10,
-};
-
-const metricBox: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  borderRadius: 12,
-  padding: 12,
-};
-
-const metricTitle: React.CSSProperties = {
-  fontSize: 12,
-  color: "#6b7280",
-  marginBottom: 4,
-};
-
-const metricValue: React.CSSProperties = {
-  fontSize: 18,
-  fontWeight: 800,
-  color: "#111827",
-};
-
-const tableWrapper: React.CSSProperties = {
+const textareaStyle: React.CSSProperties = {
   width: "100%",
-  overflowX: "auto",
+  minHeight: 120,
+  padding: "14px 16px",
+  borderRadius: 14,
+  border: "1px solid rgba(212,175,55,0.22)",
+  background: "#050505",
+  color: "#ffffff",
+  outline: "none",
+  fontSize: 15,
+  resize: "vertical",
 };
 
-const tableStyle: React.CSSProperties = {
+const selectStyle: React.CSSProperties = {
   width: "100%",
-  borderCollapse: "collapse",
-  minWidth: 700,
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "14px 12px",
-  borderBottom: "1px solid #e5e7eb",
-  color: "#374151",
-  fontSize: 13,
-  fontWeight: 700,
-  background: "#f9fafb",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "14px 12px",
-  borderBottom: "1px solid #f3f4f6",
-  color: "#111827",
-  fontSize: 14,
-};
-
-const emptyBox: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 16,
-  padding: 30,
-  textAlign: "center",
-  color: "#6b7280",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  border: "1px solid #eef2f7",
-};
-
-const emptyInline: React.CSSProperties = {
-  color: "#6b7280",
-  fontSize: 14,
+  padding: "14px 16px",
+  borderRadius: 14,
+  border: "1px solid rgba(212,175,55,0.22)",
+  background: "#050505",
+  color: "#ffffff",
+  outline: "none",
+  fontSize: 15,
 };
 
 const primaryButton: React.CSSProperties = {
-  padding: "12px 16px",
-  background: "#07163a",
-  color: "#ffffff",
-  border: "none",
-  borderRadius: 10,
+  padding: "14px 18px",
+  borderRadius: 14,
+  border: "1px solid #d4af37",
+  background: "#d4af37",
+  color: "#000000",
+  fontWeight: 800,
+  fontSize: 15,
   cursor: "pointer",
-  fontWeight: 700,
 };
 
 const secondaryButton: React.CSSProperties = {
-  padding: "12px 16px",
-  background: "#e5e7eb",
-  color: "#111827",
-  border: "none",
-  borderRadius: 10,
-  cursor: "pointer",
+  padding: "14px 18px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "#111111",
+  color: "#ffffff",
   fontWeight: 700,
+  fontSize: 15,
+  cursor: "pointer",
 };

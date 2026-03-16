@@ -4,6 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
+type PermissaoSistema =
+  | "master"
+  | "diretora_tecnica"
+  | "diretora_financeira"
+  | "admin_corretora"
+  | "corretor"
+  | "usuario"
+  | string;
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -13,51 +22,90 @@ export default function LoginPage() {
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
 
+  function redirecionarPorPermissao(permissao: PermissaoSistema) {
+    const p = String(permissao || "").trim().toLowerCase();
+
+    if (p === "master") {
+      router.push("/dashboard");
+      return;
+    }
+
+    if (p === "diretora_tecnica") {
+      router.push("/analise-tecnica");
+      return;
+    }
+
+    if (p === "diretora_financeira") {
+      router.push("/financeiro");
+      return;
+    }
+
+    if (p === "admin_corretora" || p === "corretor" || p === "usuario") {
+      router.push("/entrada");
+      return;
+    }
+
+    setErro(`Permissão não reconhecida: ${permissao}`);
+    setLoading(false);
+  }
+
   async function login(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setErro("");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password: senha,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: senha,
+      });
 
-    if (error) {
-      setErro("E-mail ou senha inválidos.");
+      if (error) {
+        setErro("E-mail ou senha inválidos.");
+        setLoading(false);
+        return;
+      }
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        setErro("Usuário não encontrado após o login.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: usuarioBanco, error: usuarioError } = await supabase
+        .from("usuarios")
+        .select("id, permissao, status, ativo")
+        .eq("id", user.id)
+        .single();
+
+      if (usuarioError || !usuarioBanco) {
+        setErro("Seu acesso ainda não foi configurado na tabela usuarios.");
+        setLoading(false);
+        return;
+      }
+
+      if (usuarioBanco.status !== "ativo" || usuarioBanco.ativo !== true) {
+        setErro("Seu acesso está inativo ou bloqueado.");
+        setLoading(false);
+        return;
+      }
+
+      if (!usuarioBanco.permissao) {
+        setErro("Seu usuário está sem permissão definida.");
+        setLoading(false);
+        return;
+      }
+
+      redirecionarPorPermissao(usuarioBanco.permissao);
+    } catch {
+      setErro("Ocorreu um erro ao entrar no sistema.");
       setLoading(false);
-      return;
     }
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setErro("Usuário não encontrado após o login.");
-      setLoading(false);
-      return;
-    }
-
-    const { data: usuarioBanco, error: usuarioError } = await supabase
-      .from("usuarios")
-      .select("id, permissao, status, ativo")
-      .eq("id", user.id)
-      .single();
-
-    if (usuarioError || !usuarioBanco) {
-      setErro("Seu acesso ainda não foi configurado na tabela usuarios.");
-      setLoading(false);
-      return;
-    }
-
-    if (usuarioBanco.status !== "ativo" || usuarioBanco.ativo !== true) {
-      setErro("Seu acesso está inativo ou bloqueado.");
-      setLoading(false);
-      return;
-    }
-
-    router.push("/dashboard");
   }
 
   return (
@@ -210,8 +258,9 @@ export default function LoginPage() {
               borderRadius: "8px",
               color: "#000",
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
               fontSize: "15px",
+              opacity: loading ? 0.8 : 1,
             }}
           >
             {loading ? "Entrando..." : "Entrar no sistema"}
