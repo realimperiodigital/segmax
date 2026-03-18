@@ -1,263 +1,190 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+function normalizarPermissao(valor?: string | null) {
+  const v = String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
-type PermissaoSistema =
-  | "master"
-  | "diretora_tecnica"
-  | "diretora_financeira"
-  | "admin_corretora"
-  | "corretor"
-  | "usuario"
-  | string;
+  if (
+    v === "master" ||
+    v === "super master" ||
+    v === "super_master" ||
+    v === "supermaster"
+  ) {
+    return "master";
+  }
+
+  if (
+    v === "tecnico" ||
+    v === "tecnica" ||
+    v === "diretora tecnica" ||
+    v === "diretor tecnico" ||
+    v === "analise tecnica" ||
+    v === "analista tecnico"
+  ) {
+    return "tecnico";
+  }
+
+  if (
+    v === "financeiro" ||
+    v === "diretora financeira" ||
+    v === "diretor financeiro"
+  ) {
+    return "financeiro";
+  }
+
+  if (
+    v === "operacional" ||
+    v === "usuario" ||
+    v === "usuário" ||
+    v === "corretora"
+  ) {
+    return "operacional";
+  }
+
+  return "";
+}
+
+function rotaInicialPorPermissao(permissao: string) {
+  switch (permissao) {
+    case "master":
+      return "/dashboard";
+    case "tecnico":
+      return "/analise-tecnica";
+    case "financeiro":
+      return "/financeiro";
+    case "operacional":
+      return "/dashboard";
+    default:
+      return "/login";
+  }
+}
 
 export default function LoginPage() {
   const router = useRouter();
 
+  const supabase = useMemo(() => {
+    return createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }, []);
+
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  function redirecionarPorPermissao(permissao: PermissaoSistema) {
-    const p = String(permissao || "").trim().toLowerCase();
-
-    if (p === "master") {
-      router.push("/master");
-      return;
-    }
-
-    if (p === "diretora_tecnica") {
-      router.push("/analise-tecnica");
-      return;
-    }
-
-    if (p === "diretora_financeira") {
-      router.push("/financeiro");
-      return;
-    }
-
-    router.push("/dashboard");
-  }
-
-  async function buscarPermissaoUsuario(userId: string) {
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("permissao")
-      .eq("auth_user_id", userId)
-      .maybeSingle();
-
-    if (!error && data?.permissao) {
-      return data.permissao as PermissaoSistema;
-    }
-
-    const { data: perfil, error: perfilError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (!perfilError && perfil?.role) {
-      return perfil.role as PermissaoSistema;
-    }
-
-    return "usuario";
-  }
-
-  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+  async function handleLogin(e: FormEvent) {
     e.preventDefault();
     setErro("");
-    setLoading(true);
+    setCarregando(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password: senha,
       });
 
-      if (error || !data.user) {
-        setErro(error?.message || "Não foi possível entrar no sistema.");
-        setLoading(false);
+      if (authError) {
+        setErro(authError.message || "Não foi possível entrar.");
+        setCarregando(false);
         return;
       }
 
-      const permissao = await buscarPermissaoUsuario(data.user.id);
-      redirecionarPorPermissao(permissao);
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user?.email) {
+        setErro("Usuário autenticado, mas sem e-mail disponível.");
+        setCarregando(false);
+        return;
+      }
+
+      const { data: usuario, error: usuarioError } = await supabase
+        .from("usuarios")
+        .select("email, permissao")
+        .eq("email", user.email)
+        .maybeSingle();
+
+      if (usuarioError) {
+        setErro("Entrou, mas não foi possível localizar a permissão do usuário.");
+        setCarregando(false);
+        return;
+      }
+
+      const permissao = normalizarPermissao(usuario?.permissao);
+      const destino = rotaInicialPorPermissao(permissao);
+
+      if (!permissao || destino === "/login") {
+        setErro("Permissão do usuário não encontrada ou inválida.");
+        setCarregando(false);
+        return;
+      }
+
+      router.replace(destino);
+      router.refresh();
     } catch {
-      setErro("Ocorreu um erro inesperado ao tentar entrar.");
-      setLoading(false);
+      setErro("Ocorreu um erro inesperado ao entrar.");
+      setCarregando(false);
     }
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#050505",
-        color: "#fff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "Arial, sans-serif",
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          padding: 32,
-          borderRadius: 20,
-          border: "1px solid rgba(212,175,55,0.25)",
-          background: "rgba(255,255,255,0.02)",
-          boxShadow: "0 0 40px rgba(0,0,0,0.35)",
-        }}
-      >
-        <div style={{ marginBottom: 24, textAlign: "center" }}>
-          <h1
-            style={{
-              margin: 0,
-              color: "#d4af37",
-              fontSize: 32,
-              fontWeight: 700,
-            }}
-          >
-            SegMax CRM
-          </h1>
-          <p style={{ marginTop: 10, color: "#ddd", fontSize: 15 }}>
-            Acesso à plataforma
+    <main className="min-h-screen bg-black text-white flex items-center justify-center px-6">
+      <div className="w-full max-w-md rounded-3xl border border-yellow-700/30 bg-zinc-950 p-8 shadow-2xl">
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold tracking-tight">SegMax CRM</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            Acesse sua área com segurança.
           </p>
         </div>
 
-        <form onSubmit={handleLogin}>
-          <label
-            htmlFor="email"
-            style={{
-              display: "block",
-              marginBottom: 8,
-              fontSize: 14,
-              color: "#d4af37",
-            }}
-          >
-            E-mail
-          </label>
-          <input
-            id="email"
-            type="email"
-            placeholder="seuemail@empresa.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{
-              width: "100%",
-              height: 52,
-              padding: "0 16px",
-              marginBottom: 18,
-              borderRadius: 12,
-              border: "1px solid rgba(212,175,55,0.2)",
-              background: "#0d0d0d",
-              color: "#fff",
-              outline: "none",
-              fontSize: 15,
-              boxSizing: "border-box",
-            }}
-          />
-
-          <label
-            htmlFor="senha"
-            style={{
-              display: "block",
-              marginBottom: 8,
-              fontSize: 14,
-              color: "#d4af37",
-            }}
-          >
-            Senha
-          </label>
-
-          <div style={{ position: "relative", marginBottom: 18 }}>
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div>
+            <label className="mb-2 block text-sm text-zinc-300">E-mail</label>
             <input
-              id="senha"
-              type={mostrarSenha ? "text" : "password"}
-              placeholder="Digite sua senha"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-yellow-600"
+              placeholder="seuemail@segmax.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm text-zinc-300">Senha</label>
+            <input
+              type="password"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
+              className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-yellow-600"
+              placeholder="Digite sua senha"
               required
-              style={{
-                width: "100%",
-                height: 52,
-                padding: "0 90px 0 16px",
-                borderRadius: 12,
-                border: "1px solid rgba(212,175,55,0.2)",
-                background: "#0d0d0d",
-                color: "#fff",
-                outline: "none",
-                fontSize: 15,
-                boxSizing: "border-box",
-              }}
             />
-
-            <button
-              type="button"
-              onClick={() => setMostrarSenha((v) => !v)}
-              style={{
-                position: "absolute",
-                right: 12,
-                top: 11,
-                height: 30,
-                padding: "0 10px",
-                borderRadius: 8,
-                border: "none",
-                background: "transparent",
-                color: "#d4af37",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              {mostrarSenha ? "Ocultar" : "Mostrar"}
-            </button>
           </div>
 
           {erro ? (
-            <div
-              style={{
-                marginBottom: 16,
-                padding: 12,
-                borderRadius: 10,
-                background: "rgba(180,0,0,0.12)",
-                border: "1px solid rgba(255,0,0,0.2)",
-                color: "#ffb3b3",
-                fontSize: 14,
-              }}
-            >
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
               {erro}
             </div>
           ) : null}
 
           <button
             type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              height: 52,
-              borderRadius: 12,
-              border: "none",
-              background: "#d4af37",
-              color: "#111",
-              fontWeight: 800,
-              fontSize: 16,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-            }}
+            disabled={carregando}
+            className="w-full rounded-2xl bg-yellow-500 px-4 py-3 font-semibold text-black transition hover:bg-yellow-400 disabled:opacity-60"
           >
-            {loading ? "Entrando..." : "Entrar no sistema"}
+            {carregando ? "Entrando..." : "Entrar"}
           </button>
         </form>
       </div>
