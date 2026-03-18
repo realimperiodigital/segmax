@@ -25,45 +25,42 @@ function normalizarPermissao(valor?: string | null) {
     v === "tecnica" ||
     v === "diretora tecnica" ||
     v === "diretor tecnico" ||
+    v === "diretora_tecnica" ||
     v === "analise tecnica" ||
     v === "analista tecnico"
   ) {
-    return "tecnico";
+    return "diretora_tecnica";
   }
 
   if (
     v === "financeiro" ||
     v === "diretora financeira" ||
-    v === "diretor financeiro"
+    v === "diretor financeiro" ||
+    v === "diretora_financeira"
   ) {
-    return "financeiro";
+    return "diretora_financeira";
   }
 
   if (
     v === "operacional" ||
     v === "usuario" ||
     v === "usuário" ||
-    v === "corretora"
+    v === "corretor" ||
+    v === "corretora" ||
+    v === "admin_corretora"
   ) {
-    return "operacional";
+    return "corretor";
   }
 
   return "";
 }
 
 function rotaInicialPorPermissao(permissao: string) {
-  switch (permissao) {
-    case "master":
-      return "/dashboard";
-    case "tecnico":
-      return "/analise-tecnica";
-    case "financeiro":
-      return "/financeiro";
-    case "operacional":
-      return "/dashboard";
-    default:
-      return "/login";
-  }
+  if (permissao === "master") return "/dashboard";
+  if (permissao === "diretora_tecnica") return "/analise-tecnica";
+  if (permissao === "diretora_financeira") return "/financeiro";
+  if (permissao === "corretor") return "/cotacoes";
+  return "/login";
 }
 
 export default function LoginPage() {
@@ -87,8 +84,11 @@ export default function LoginPage() {
     setCarregando(true);
 
     try {
+      // mata qualquer sessão antiga antes de entrar
+      await supabase.auth.signOut();
+
       const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password: senha,
       });
 
@@ -138,6 +138,12 @@ export default function LoginPage() {
     }
   }
 
+  async function handleSairTudo() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }
+
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center px-6">
       <div className="w-full max-w-md rounded-3xl border border-yellow-700/30 bg-zinc-950 p-8 shadow-2xl">
@@ -185,6 +191,14 @@ export default function LoginPage() {
             className="w-full rounded-2xl bg-yellow-500 px-4 py-3 font-semibold text-black transition hover:bg-yellow-400 disabled:opacity-60"
           >
             {carregando ? "Entrando..." : "Entrar"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSairTudo}
+            className="w-full rounded-2xl border border-zinc-800 bg-black px-4 py-3 font-semibold text-white transition hover:border-yellow-700 hover:text-yellow-400"
+          >
+            Limpar sessão atual
           </button>
         </form>
       </div>

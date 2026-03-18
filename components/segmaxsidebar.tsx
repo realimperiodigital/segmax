@@ -146,6 +146,7 @@ export default function SegmaxSidebar({
             {role === "diretora_financeira" && (
               <>
                 <Item href="/financeiro" label="Financeiro" />
+                <Item href="/cotacoes" label="Cotações" />
               </>
             )}
 
