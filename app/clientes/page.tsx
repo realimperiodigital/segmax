@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
 import {
+  AlertTriangle,
   ArrowRight,
   Briefcase,
   Building2,
@@ -32,16 +34,17 @@ type Cliente = {
   estado: string;
 };
 
-const menuItems: SegmaxMenuItem[] = [
-  { label: "Centro de Controle", href: "/dashboard", exact: true },
-  { label: "Corretoras", href: "/corretoras" },
-  { label: "Usuários", href: "/usuarios" },
-  { label: "Clientes", href: "/clientes" },
-  { label: "Seguradoras", href: "/seguradoras" },
-  { label: "Cotações", href: "/cotacoes" },
-  { label: "Análise Técnica", href: "/analise-tecnica" },
-  { label: "Financeiro", href: "/financeiro" },
-];
+type UsuarioAtual = {
+  id: string;
+  nome: string;
+  email: string | null;
+  role: string;
+  corretora_id: string | null;
+};
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const clientesBase: Cliente[] = [
   {
@@ -105,6 +108,33 @@ const clientesBase: Cliente[] = [
     estado: "SP",
   },
 ];
+
+function montarMenu(role: string): SegmaxMenuItem[] {
+  const itens: SegmaxMenuItem[] = [
+    { label: "Centro de Controle", href: "/dashboard" },
+    { label: "Corretoras", href: "/corretoras" },
+    { label: "Usuários", href: "/usuarios" },
+    { label: "Clientes", href: "/clientes" },
+    { label: "Seguradoras", href: "/seguradoras" },
+    { label: "Cotações", href: "/cotacoes" },
+    { label: "Análise Técnica", href: "/analise-tecnica" },
+    { label: "Financeiro", href: "/financeiro" },
+  ];
+
+  if (role === "super_master" || role === "master") {
+    itens.push({ label: "Aprovações de Exclusão", href: "/aprovacoes-exclusao" });
+  }
+
+  return itens;
+}
+
+function formatarCargo(role: string) {
+  if (role === "super_master") return "Super Master";
+  if (role === "master") return "Master";
+  if (role === "financeiro") return "Financeiro";
+  if (role === "analista") return "Analista";
+  return "Usuário";
+}
 
 function SectionCard({
   children,
@@ -201,6 +231,53 @@ function TipoBadge({ tipo }: { tipo: Cliente["tipo"] }) {
 
 export default function ClientesPage() {
   const [busca, setBusca] = useState("");
+  const [carregandoPerfil, setCarregandoPerfil] = useState(true);
+  const [erroPerfil, setErroPerfil] = useState("");
+  const [usuarioAtual, setUsuarioAtual] = useState<UsuarioAtual | null>(null);
+
+  useEffect(() => {
+    async function carregarPerfil() {
+      try {
+        setCarregandoPerfil(true);
+        setErroPerfil("");
+
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError || !session?.access_token) {
+          throw new Error("Sessão não encontrada. Faça login novamente.");
+        }
+
+        const response = await fetch("/api/auth/me", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result?.success) {
+          throw new Error(result?.message || "Não foi possível carregar o perfil.");
+        }
+
+        setUsuarioAtual(result.user);
+      } catch (error) {
+        console.error(error);
+        setErroPerfil(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar o perfil do usuário."
+        );
+      } finally {
+        setCarregandoPerfil(false);
+      }
+    }
+
+    carregarPerfil();
+  }, []);
 
   const clientesFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -224,13 +301,17 @@ export default function ClientesPage() {
   const totalAnalise = clientesBase.filter((c) => c.status === "Em análise").length;
   const totalPj = clientesBase.filter((c) => c.tipo === "Pessoa Jurídica").length;
 
+  const nomeUsuario = usuarioAtual?.nome || "Usuário";
+  const cargoUsuario = formatarCargo(usuarioAtual?.role || "usuario");
+  const menuItems = montarMenu(usuarioAtual?.role || "usuario");
+
   return (
     <SegmaxShell
       title="Gestão de clientes"
       subtitle="Centralize a carteira, acompanhe status operacionais e mantenha a base pronta para análise técnica e cotação."
       badge="Base comercial SegMax"
-      username="Renato"
-      userrole="Super Master"
+      username={nomeUsuario}
+      userrole={cargoUsuario}
       menuitems={menuItems}
       actions={
         <>
@@ -248,6 +329,12 @@ export default function ClientesPage() {
         </>
       }
     >
+      {erroPerfil ? (
+        <SectionCard className="border-red-500/20 bg-red-500/10">
+          <p className="text-sm font-semibold text-red-300">{erroPerfil}</p>
+        </SectionCard>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-4">
         <SectionCard>
           <div className="flex items-start justify-between gap-4">
@@ -344,124 +431,143 @@ export default function ClientesPage() {
           </label>
         </div>
 
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[1220px] border-separate border-spacing-y-3">
-            <thead>
-              <tr>
-                <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
-                  Cliente
-                </th>
-                <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
-                  Tipo
-                </th>
-                <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
-                  Corretora
-                </th>
-                <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
-                  Responsável
-                </th>
-                <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
-                  Segmento
-                </th>
-                <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
-                  Status
-                </th>
-                <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
-                  Cidade
-                </th>
-                <th className="px-4 text-right text-[12px] uppercase tracking-[0.22em] text-zinc-500">
-                  Ações
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {clientesFiltrados.map((cliente) => (
-                <tr key={cliente.id}>
-                  <td className="rounded-l-2xl border-y border-l border-white/6 bg-white/[0.03] px-4 py-4">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/8 text-[#d4af37]">
-                        <UserRound size={18} />
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {cliente.nome}
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {cliente.documento}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
-                    <TipoBadge tipo={cliente.tipo} />
-                  </td>
-
-                  <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
-                    <div className="flex items-center gap-2">
-                      <Building2 size={16} className="text-zinc-500" />
-                      <span className="text-sm text-white">{cliente.corretora}</span>
-                    </div>
-                  </td>
-
-                  <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
-                    <p className="text-sm text-white">{cliente.responsavel}</p>
-                  </td>
-
-                  <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
-                    <p className="text-sm text-white">{cliente.segmento}</p>
-                  </td>
-
-                  <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
-                    <StatusBadge status={cliente.status} />
-                  </td>
-
-                  <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
-                    <p className="text-sm text-white">{cliente.cidade}</p>
-                    <p className="mt-1 text-xs text-zinc-500">{cliente.estado}</p>
-                  </td>
-
-                  <td className="rounded-r-2xl border-y border-r border-white/6 bg-white/[0.03] px-4 py-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/clientes/${cliente.id}`}
-                        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-xs font-semibold text-white transition hover:border-[#d4af37]/30 hover:bg-[#d4af37]/8"
-                      >
-                        <Eye size={15} />
-                        Abrir
-                      </Link>
-
-                      <Link
-                        href={`/clientes/${cliente.id}/editar`}
-                        className="inline-flex items-center gap-2 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/8 px-3 py-2 text-xs font-semibold text-[#f3d77a] transition hover:border-[#d4af37]/35 hover:bg-[#d4af37]/12"
-                      >
-                        Editar
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {clientesFiltrados.length === 0 && (
+        {carregandoPerfil ? (
+          <div className="mt-6 rounded-2xl border border-white/8 bg-white/[0.03] px-6 py-10 text-center">
+            <p className="text-base font-medium text-white">Carregando permissões...</p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Aguarde alguns segundos.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 overflow-x-auto">
+            <table className="w-full min-w-[1340px] border-separate border-spacing-y-3">
+              <thead>
                 <tr>
-                  <td
-                    colSpan={8}
-                    className="rounded-2xl border border-white/8 bg-white/[0.03] px-6 py-10 text-center"
-                  >
-                    <p className="text-base font-medium text-white">
-                      Nenhum cliente encontrado
-                    </p>
-                    <p className="mt-2 text-sm text-zinc-500">
-                      Ajuste a busca ou cadastre um novo cliente.
-                    </p>
-                  </td>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Cliente
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Tipo
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Corretora
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Responsável
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Segmento
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Status
+                  </th>
+                  <th className="px-4 text-left text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Cidade
+                  </th>
+                  <th className="px-4 text-right text-[12px] uppercase tracking-[0.22em] text-zinc-500">
+                    Ações
+                  </th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+
+              <tbody>
+                {clientesFiltrados.map((cliente) => (
+                  <tr key={cliente.id}>
+                    <td className="rounded-l-2xl border-y border-l border-white/6 bg-white/[0.03] px-4 py-4">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/8 text-[#d4af37]">
+                          <UserRound size={18} />
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {cliente.nome}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            {cliente.documento}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
+                      <TipoBadge tipo={cliente.tipo} />
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <Building2 size={16} className="text-zinc-500" />
+                        <span className="text-sm text-white">{cliente.corretora}</span>
+                      </div>
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
+                      <p className="text-sm text-white">{cliente.responsavel}</p>
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
+                      <p className="text-sm text-white">{cliente.segmento}</p>
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
+                      <StatusBadge status={cliente.status} />
+                    </td>
+
+                    <td className="border-y border-white/6 bg-white/[0.03] px-4 py-4">
+                      <p className="text-sm text-white">{cliente.cidade}</p>
+                      <p className="mt-1 text-xs text-zinc-500">{cliente.estado}</p>
+                    </td>
+
+                    <td className="rounded-r-2xl border-y border-r border-white/6 bg-white/[0.03] px-4 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/clientes/${cliente.id}`}
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-xs font-semibold text-white transition hover:border-[#d4af37]/30 hover:bg-[#d4af37]/8"
+                        >
+                          <Eye size={15} />
+                          Abrir
+                        </Link>
+
+                        <Link
+                          href={`/clientes/${cliente.id}/editar`}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/8 px-3 py-2 text-xs font-semibold text-[#f3d77a] transition hover:border-[#d4af37]/35 hover:bg-[#d4af37]/12"
+                        >
+                          Editar
+                        </Link>
+
+                        <Link
+                          href={`/clientes/${cliente.id}/solicitar-exclusao?cliente=${encodeURIComponent(
+                            cliente.nome
+                          )}&corretora=${encodeURIComponent(cliente.corretora)}`}
+                          className="inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:border-red-500/35 hover:bg-red-500/15"
+                        >
+                          <AlertTriangle size={15} />
+                          Solicitar exclusão
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {clientesFiltrados.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="rounded-2xl border border-white/8 bg-white/[0.03] px-6 py-10 text-center"
+                    >
+                      <p className="text-base font-medium text-white">
+                        Nenhum cliente encontrado
+                      </p>
+                      <p className="mt-2 text-sm text-zinc-500">
+                        Ajuste a busca ou cadastre um novo cliente.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SectionCard>
     </SegmaxShell>
   );

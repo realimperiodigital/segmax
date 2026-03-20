@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react"
 import {
-  aprovarSolicitacaoExclusaoMaster,
-  listarSolicitacoesPendentesMaster,
+  aprovarSolicitacaoExclusao,
+  listarSolicitacoesPendentes,
+  recusarSolicitacaoExclusao,
 } from "@/lib/exclusao-aprovacao"
 
 type Solicitacao = {
@@ -17,33 +18,30 @@ type Solicitacao = {
   status: string
   criado_em: string
   dados_alvo?: any
-  aprovacao_nivel?: string
-  aprovador_destino?: string
 }
 
 const MAPA_TABELAS: Record<string, string> = {
   clientes: "clientes",
-  cotacoes: "cotacoes",
-  usuarios: "usuarios",
   corretoras: "corretoras",
+  usuarios: "usuarios",
   seguradoras: "seguradoras",
+  cotacoes: "cotacoes",
 }
 
-export default function AprovacoesMasterPage() {
+export default function AprovacoesExclusaoPage() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
   const [loading, setLoading] = useState(true)
-  const [erro, setErro] = useState("")
   const [processandoId, setProcessandoId] = useState<string | null>(null)
+  const [erro, setErro] = useState("")
 
   async function carregar() {
     try {
       setErro("")
       setLoading(true)
-
-      const data = await listarSolicitacoesPendentesMaster()
+      const data = await listarSolicitacoesPendentes()
       setSolicitacoes(data)
     } catch (e: any) {
-      setErro(e.message || "Erro ao carregar solicitações.")
+      setErro(e.message || "Não foi possível carregar as solicitações.")
     } finally {
       setLoading(false)
     }
@@ -63,18 +61,16 @@ export default function AprovacoesMasterPage() {
     const tabelaAlvo = MAPA_TABELAS[item.modulo]
 
     if (!tabelaAlvo) {
-      alert(`O módulo "${item.modulo}" não está mapeado para exclusão.`)
+      alert("Tabela alvo não mapeada para este módulo.")
       return
     }
 
     try {
       setProcessandoId(item.id)
-
-      await aprovarSolicitacaoExclusaoMaster({
+      await aprovarSolicitacaoExclusao({
         solicitacaoId: item.id,
         tabelaAlvo,
       })
-
       await carregar()
     } catch (e: any) {
       alert(e.message || "Erro ao aprovar solicitação.")
@@ -83,12 +79,35 @@ export default function AprovacoesMasterPage() {
     }
   }
 
+  async function handleRecusar(item: Solicitacao) {
+    const motivoRecusa = prompt("Digite o motivo da recusa:") || ""
+
+    if (!motivoRecusa.trim()) {
+      alert("Informe o motivo da recusa.")
+      return
+    }
+
+    try {
+      setProcessandoId(item.id)
+      await recusarSolicitacaoExclusao({
+        solicitacaoId: item.id,
+        motivoRecusa,
+      })
+      await carregar()
+    } catch (e: any) {
+      alert(e.message || "Erro ao recusar solicitação.")
+    } finally {
+      setProcessandoId(null)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-black px-6 py-8 text-white md:px-8">
       <section className="rounded-[28px] border border-[#3a2a00] bg-[#050505] p-7">
-        <h1 className="text-4xl font-bold">Aprovações do Master</h1>
+        <h1 className="text-4xl font-bold">Aprovação de exclusões</h1>
         <p className="mt-3 max-w-3xl text-zinc-400">
-          Aqui ficam as solicitações que chegaram para aprovação final da SegMax.
+          Aqui o Master aprova ou recusa pedidos de exclusão feitos pelos outros
+          perfis da operação.
         </p>
       </section>
 
@@ -103,7 +122,7 @@ export default function AprovacoesMasterPage() {
           </div>
         ) : solicitacoes.length === 0 ? (
           <div className="py-10 text-center text-zinc-400">
-            Nenhuma solicitação pendente para o master.
+            Nenhuma solicitação pendente no momento.
           </div>
         ) : (
           <div className="space-y-4">
@@ -115,7 +134,7 @@ export default function AprovacoesMasterPage() {
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="space-y-3">
                     <div className="inline-flex rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-yellow-400">
-                      Pendente master
+                      Pendente
                     </div>
 
                     <h2 className="text-2xl font-bold">
@@ -124,7 +143,7 @@ export default function AprovacoesMasterPage() {
 
                     <div className="space-y-1 text-sm text-zinc-400">
                       <p>
-                        <span className="text-white">ID:</span>{" "}
+                        <span className="text-white">ID do registro:</span>{" "}
                         {item.entidade_id}
                       </p>
                       <p>
@@ -133,9 +152,6 @@ export default function AprovacoesMasterPage() {
                       </p>
                       <p>
                         <span className="text-white">Motivo:</span> {item.motivo}
-                      </p>
-                      <p>
-                        <span className="text-white">Status:</span> {item.status}
                       </p>
                       <p>
                         <span className="text-white">Criado em:</span>{" "}
@@ -159,6 +175,14 @@ export default function AprovacoesMasterPage() {
                       {processandoId === item.id
                         ? "Processando..."
                         : "Aprovar exclusão"}
+                    </button>
+
+                    <button
+                      onClick={() => handleRecusar(item)}
+                      disabled={processandoId === item.id}
+                      className="rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm font-bold text-red-300 transition hover:bg-red-500/20 disabled:opacity-60"
+                    >
+                      Recusar solicitação
                     </button>
                   </div>
                 </div>
