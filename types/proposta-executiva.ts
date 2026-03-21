@@ -1,77 +1,160 @@
-export type PropostaExecutivaPayload = {
-  cliente_id?: string | null;
-  cotacao_id?: string | null;
-  corretora_id?: string | null;
+export type PropostaStatus =
+  | "rascunho"
+  | "em_analise"
+  | "aguardando_aprovacao"
+  | "aprovada"
+  | "rejeitada"
+  | "cancelada"
+  | "emitida"
+  | "pos_venda";
 
-  titulo_documento?: string | null;
-  subtitulo_documento?: string | null;
-  status?: string | null;
+export type PropostaEtapa =
+  | "criacao"
+  | "analise"
+  | "aprovacao"
+  | "emissao"
+  | "implantacao"
+  | "pos_venda";
 
-  cliente_nome?: string | null;
-  cliente_documento?: string | null;
-  cliente_empresa?: string | null;
-  cliente_contato?: string | null;
-  cliente_email?: string | null;
-  cliente_telefone?: string | null;
-  cliente_endereco?: string | null;
-
-  corretora_nome?: string | null;
-  corretora_responsavel?: string | null;
-  corretora_email?: string | null;
-  corretora_telefone?: string | null;
-  corretora_logo_url?: string | null;
-
-  seguradora_nome?: string | null;
-  ramo_seguro?: string | null;
-  objeto_segurado?: string | null;
-  importancia_segurada?: string | number | null;
-};
-
-export type PropostaExecutivaRegistro = {
+export type PropostaExecutiva = {
   id: string;
-  numero_proposta: string | null;
-  titulo_documento: string | null;
-  subtitulo_documento: string | null;
-  status: string | null;
+  codigo: string | null;
+  titulo: string;
 
   cliente_id: string | null;
-  cotacao_id: string | null;
-  corretora_id: string | null;
-
-  cliente_nome: string | null;
+  cliente_nome: string;
   cliente_documento: string | null;
-  cliente_empresa: string | null;
-  cliente_contato: string | null;
-  cliente_email: string | null;
-  cliente_telefone: string | null;
-  cliente_endereco: string | null;
 
+  corretora_id: string | null;
   corretora_nome: string | null;
-  corretora_responsavel: string | null;
-  corretora_email: string | null;
-  corretora_telefone: string | null;
-  corretora_logo_url: string | null;
 
+  cotacao_id: string | null;
+  seguradora_id: string | null;
   seguradora_nome: string | null;
-  ramo_seguro: string | null;
-  objeto_segurado: string | null;
-  importancia_segurada: string | number | null;
 
-  token_publico: string | null;
-  link_publico: string | null;
+  responsavel_id: string | null;
+  responsavel_nome: string | null;
 
+  tipo_seguro: string | null;
+  categoria: string | null;
+
+  status: PropostaStatus;
+  etapa: PropostaEtapa;
+
+  valor_premio: number | null;
+  valor_franquia: number | null;
+  valor_importancia_segurada: number | null;
+  valor_comissao: number | null;
+
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
+
+  resumo_executivo: string | null;
+  observacoes_internas: string | null;
   observacoes_cliente: string | null;
-  motivo_recusa: string | null;
+  parecer_tecnico: string | null;
 
-  visualizada_em: string | null;
-  aprovada_em: string | null;
-  recusada_em: string | null;
-  encerrada_em: string | null;
+  aprovado_por: string | null;
+  aprovado_em: string | null;
 
-  pdf_gerado_em: string | null;
-  enviado_whatsapp_em: string | null;
-  enviado_email_em: string | null;
+  rejeitado_por: string | null;
+  rejeitado_em: string | null;
+  motivo_rejeicao: string | null;
 
-  created_at: string | null;
-  updated_at: string | null;
+  emitido_em: string | null;
+  implantado_em: string | null;
+
+  ativo: boolean;
+
+  criado_por: string | null;
+  criado_por_nome: string | null;
+  atualizado_por: string | null;
+  atualizado_por_nome: string | null;
+
+  created_at: string;
+  updated_at: string;
+
+  total_movimentacoes?: number;
+  ultima_movimentacao_em?: string | null;
+};
+
+export type PropostaExecutivaPayload = {
+  titulo: string;
+
+  cliente_id?: string | null;
+  cliente_nome: string;
+  cliente_documento?: string | null;
+
+  corretora_id?: string | null;
+  corretora_nome?: string | null;
+
+  cotacao_id?: string | null;
+  seguradora_id?: string | null;
+  seguradora_nome?: string | null;
+
+  responsavel_id?: string | null;
+  responsavel_nome?: string | null;
+
+  tipo_seguro?: string | null;
+  categoria?: string | null;
+
+  status?: PropostaStatus;
+  etapa?: PropostaEtapa;
+
+  valor_premio?: number | null;
+  valor_franquia?: number | null;
+  valor_importancia_segurada?: number | null;
+  valor_comissao?: number | null;
+
+  vigencia_inicio?: string | null;
+  vigencia_fim?: string | null;
+
+  resumo_executivo?: string | null;
+  observacoes_internas?: string | null;
+  observacoes_cliente?: string | null;
+  parecer_tecnico?: string | null;
+
+  aprovado_por?: string | null;
+  aprovado_em?: string | null;
+
+  rejeitado_por?: string | null;
+  rejeitado_em?: string | null;
+  motivo_rejeicao?: string | null;
+
+  emitido_em?: string | null;
+  implantado_em?: string | null;
+
+  ativo?: boolean;
+
+  criado_por?: string | null;
+  criado_por_nome?: string | null;
+  atualizado_por?: string | null;
+  atualizado_por_nome?: string | null;
+};
+
+export type PropostaHistorico = {
+  id: string;
+  proposta_id: string;
+  acao: string;
+  status_anterior: string | null;
+  status_novo: string | null;
+  etapa_anterior: string | null;
+  etapa_nova: string | null;
+  descricao: string | null;
+  observacao: string | null;
+  usuario_id: string | null;
+  usuario_nome: string | null;
+  created_at: string;
+};
+
+export type PropostaArquivo = {
+  id: string;
+  proposta_id: string;
+  nome_arquivo: string;
+  tipo_arquivo: string | null;
+  url_arquivo: string | null;
+  tamanho_bytes: number | null;
+  enviado_por: string | null;
+  enviado_por_nome: string | null;
+  created_at: string;
 };
