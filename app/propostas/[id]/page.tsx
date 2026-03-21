@@ -43,27 +43,15 @@ function formatarMoeda(valor: any) {
 function corStatus(status?: string | null) {
   const s = (status || "").toLowerCase();
 
-  if (
-    s.includes("aprov") ||
-    s.includes("emitid") ||
-    s.includes("fechad")
-  ) {
+  if (s.includes("aprov") || s.includes("emitid") || s.includes("fechad")) {
     return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
   }
 
-  if (
-    s.includes("recus") ||
-    s.includes("reprov") ||
-    s.includes("cancel")
-  ) {
+  if (s.includes("recus") || s.includes("reprov") || s.includes("cancel")) {
     return "bg-red-500/15 text-red-300 border-red-500/30";
   }
 
-  if (
-    s.includes("analis") ||
-    s.includes("analise") ||
-    s.includes("aguard")
-  ) {
+  if (s.includes("analis") || s.includes("analise") || s.includes("aguard")) {
     return "bg-amber-500/15 text-amber-300 border-amber-500/30";
   }
 
@@ -73,9 +61,7 @@ function corStatus(status?: string | null) {
 function textoStatus(status?: string | null) {
   if (!status) return "Sem status";
 
-  return status
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (l) => l.toUpperCase());
+  return status.replaceAll("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
 function primeiroValor(obj: Record<string, any>, chaves: string[]) {
@@ -218,6 +204,14 @@ export default function PropostaDetalhePage() {
               >
                 Atualizar
               </button>
+
+              <Link
+                href={`/propostas/${id}/imprimir`}
+                target="_blank"
+                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+              >
+                Gerar proposta
+              </Link>
             </div>
           </div>
 
@@ -256,9 +250,7 @@ export default function PropostaDetalhePage() {
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             <section className="space-y-6">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                <h2 className="mb-4 text-lg font-semibold">
-                  Dados principais
-                </h2>
+                <h2 className="mb-4 text-lg font-semibold">Dados principais</h2>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -380,9 +372,7 @@ export default function PropostaDetalhePage() {
 
             <aside className="space-y-6">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                <h2 className="mb-4 text-lg font-semibold">
-                  Painel de decisão
-                </h2>
+                <h2 className="mb-4 text-lg font-semibold">Painel de decisão</h2>
 
                 <div className="space-y-4">
                   <div>
@@ -447,19 +437,17 @@ export default function PropostaDetalhePage() {
               </div>
 
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                <h2 className="mb-4 text-lg font-semibold">
-                  Fechamento do fluxo
-                </h2>
+                <h2 className="mb-4 text-lg font-semibold">Fechamento do fluxo</h2>
 
                 <div className="space-y-3 text-sm text-white/75">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    A proposta agora tem leitura por ID, histórico completo e
-                    decisão operacional centralizada.
+                    A proposta agora tem leitura por ID, histórico completo,
+                    decisão operacional centralizada e versão pronta para impressão.
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    Isso já deixa a operação pronta para teste real com corretora,
-                    aprovação técnica e acompanhamento do andamento.
+                    Isso já permite revisar, salvar em PDF e enviar ao corretor
+                    ou cliente de forma profissional.
                   </div>
                 </div>
               </div>
