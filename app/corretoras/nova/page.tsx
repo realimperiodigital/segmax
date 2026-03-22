@@ -21,198 +21,152 @@ export default function NovaCorretoraPage() {
     estado: "",
   });
 
-  function handleChange(
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm({
       ...form,
       [e.target.name]: e.target.value,
     });
   }
 
-  async function handleSubmit(
-    e: React.FormEvent
-  ) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "/api/corretoras",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(form),
-        }
-      );
+      const response = await fetch("/api/corretoras", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
 
       if (!response.ok) {
-        throw new Error("Erro ao cadastrar");
+        throw new Error("Erro ao cadastrar corretora");
       }
 
       alert("Corretora cadastrada com sucesso!");
-
       router.push("/corretoras");
-
     } catch (error) {
       console.error(error);
-      alert("Erro ao salvar corretora.");
+      alert("A API de corretoras ainda não está pronta. A tela já foi ativada.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#050505",
-        color: "#f5f5f5",
-        padding: "32px",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "700px",
-          margin: "0 auto",
-          border: "1px solid #27272a",
-          borderRadius: "16px",
-          padding: "24px",
-          background: "#0a0a0a",
-        }}
-      >
-        <h1
-          style={{
-            fontSize: "26px",
-            marginBottom: "20px",
-            color: "#facc15",
-          }}
-        >
-          Nova corretora
-        </h1>
+    <main className="min-h-screen bg-black px-6 py-10 text-white">
+      <div className="mx-auto max-w-3xl">
+        <div className="rounded-[28px] border border-amber-500/20 bg-zinc-950 p-6 shadow-2xl">
+          <div className="mb-8">
+            <p className="text-xs uppercase tracking-[0.25em] text-amber-300">
+              TESTE ONLINE 999
+            </p>
 
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "14px",
-          }}
-        >
-          <Input
-            label="Nome da corretora"
-            name="nome"
-            value={form.nome}
-            onChange={handleChange}
-          />
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-amber-400">
+              NOVA CORRETORA TESTE 999
+            </h1>
 
-          <Input
-            label="CNPJ"
-            name="cnpj"
-            value={form.cnpj}
-            onChange={handleChange}
-          />
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400">
+              Se este título aparecer no site online, significa que o deploy
+              subiu corretamente e este arquivo é o que está sendo publicado.
+            </p>
+          </div>
 
-          <Input
-            label="E-mail"
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-          />
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <Field
+              label="Nome da corretora"
+              name="nome"
+              value={form.nome}
+              onChange={handleChange}
+            />
 
-          <Input
-            label="Telefone"
-            name="telefone"
-            value={form.telefone}
-            onChange={handleChange}
-          />
+            <Field
+              label="CNPJ"
+              name="cnpj"
+              value={form.cnpj}
+              onChange={handleChange}
+            />
 
-          <Input
-            label="Cidade"
-            name="cidade"
-            value={form.cidade}
-            onChange={handleChange}
-          />
+            <Field
+              label="E-mail"
+              name="email"
+              type="email"
+              value={form.email}
+              onChange={handleChange}
+            />
 
-          <Input
-            label="Estado"
-            name="estado"
-            value={form.estado}
-            onChange={handleChange}
-          />
+            <Field
+              label="Telefone"
+              name="telefone"
+              value={form.telefone}
+              onChange={handleChange}
+            />
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              marginTop: "10px",
-              padding: "14px",
-              borderRadius: "12px",
-              border: "none",
-              fontSize: "15px",
-              fontWeight: "bold",
-              background: "#facc15",
-              color: "#000",
-              cursor: "pointer",
-            }}
-          >
-            {loading
-              ? "Salvando..."
-              : "Cadastrar corretora"}
-          </button>
-        </form>
+            <Field
+              label="Cidade"
+              name="cidade"
+              value={form.cidade}
+              onChange={handleChange}
+            />
+
+            <Field
+              label="Estado"
+              name="estado"
+              value={form.estado}
+              onChange={handleChange}
+            />
+
+            <div className="md:col-span-2 flex flex-wrap gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-2xl bg-amber-400 px-6 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading ? "Salvando..." : "Cadastrar corretora"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push("/corretoras")}
+                className="rounded-2xl border border-zinc-700 bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:border-zinc-500 hover:bg-zinc-800"
+              >
+                Voltar para corretoras
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </main>
   );
 }
 
-function Input({
+type FieldProps = {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  type?: string;
+};
+
+function Field({
   label,
   name,
   value,
   onChange,
-}: {
-  label: string;
-  name: string;
-  value: string;
-  onChange: (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => void;
-}) {
+  type = "text",
+}: FieldProps) {
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "6px",
-      }}
-    >
-      <label
-        style={{
-          fontSize: "13px",
-          color: "#a1a1aa",
-        }}
-      >
-        {label}
-      </label>
-
+    <div className="flex flex-col gap-2">
+      <label className="text-sm font-medium text-zinc-300">{label}</label>
       <input
+        type={type}
         name={name}
         value={value}
         onChange={onChange}
         required
-        style={{
-          padding: "12px",
-          borderRadius: "10px",
-          border: "1px solid #27272a",
-          background: "#000",
-          color: "#fff",
-          fontSize: "14px",
-        }}
+        className="h-12 rounded-2xl border border-zinc-800 bg-black px-4 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-amber-400"
       />
     </div>
   );
