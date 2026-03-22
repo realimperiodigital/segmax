@@ -1,60 +1,17 @@
 "use client"
 
-import { FormEvent, useMemo, useState } from "react"
+import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, Lock, User2 } from "lucide-react"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import {
   getRedirectByRole,
   normalizarSegmaxRole,
   type SegmaxRole,
 } from "@/lib/segmax-perfil"
 
-type UsuarioSistema = {
-  login: string
-  senha: string
-  nome: string
-  role: SegmaxRole
-}
-
-const USUARIOS_SEGMAX: UsuarioSistema[] = [
-  {
-    login: "segmaxconsultoria10@gmail.com",
-    senha: "Nr47444682@",
-    nome: "Renato Silva",
-    role: "master",
-  },
-  {
-    login: "tecmastersegmax@gmail.com",
-    senha: "Segmax@123",
-    nome: "Ana Paula",
-    role: "tecnico",
-  },
-  {
-    login: "alessandra.myryam26@gmail.com",
-    senha: "Am19039115@",
-    nome: "Alessandra Mendes",
-    role: "financeiro",
-  },
-]
-
-function setCookie(name: string, value: string, days = 7) {
-  const expires = new Date()
-  expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000)
-  document.cookie = `${name}=${encodeURIComponent(
-    value
-  )}; expires=${expires.toUTCString()}; path=/`
-}
-
-function salvarSessao(usuario: UsuarioSistema) {
-  const role = normalizarSegmaxRole(usuario.role)
-
-  setCookie("segmax_permissao", role)
-  setCookie("segmax_role", role)
-  setCookie("segmax_nome", usuario.nome)
-
-  localStorage.setItem("segmax_permissao", role)
-  localStorage.setItem("segmax_role", role)
-  localStorage.setItem("segmax_nome", usuario.nome)
+type UsuarioRoleRow = {
+  role: string | null
 }
 
 export default function LoginPage() {
@@ -66,36 +23,47 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState("")
 
-  const usuarios = useMemo(() => USUARIOS_SEGMAX, [])
-
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setErro("")
     setLoading(true)
 
     try {
-      const loginNormalizado = login.trim().toLowerCase()
-      const senhaNormalizada = senha.trim()
+      const email = login.trim().toLowerCase()
+      const password = senha.trim()
 
-      const usuario = usuarios.find(
-        (item) =>
-          item.login.toLowerCase() === loginNormalizado &&
-          item.senha === senhaNormalizada
-      )
+      const { data, error } = await supabaseBrowser.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-      if (!usuario) {
+      if (error || !data.user) {
         setErro("Login ou senha inválidos.")
         setLoading(false)
         return
       }
 
-      salvarSessao(usuario)
+      const { data: usuarioRow, error: roleError } = await supabaseBrowser
+        .from("usuarios")
+        .select("role")
+        .eq("id", data.user.id)
+        .maybeSingle<UsuarioRoleRow>()
 
-      const destino = getRedirectByRole(usuario.role)
+      if (roleError) {
+        setErro("Entrou no auth, mas não consegui localizar o perfil do usuário.")
+        setLoading(false)
+        return
+      }
 
-      setTimeout(() => {
-        router.replace(destino)
-      }, 150)
+      const role = normalizarSegmaxRole(usuarioRow?.role)
+      const destino = getRedirectByRole(role as SegmaxRole)
+
+      localStorage.setItem("segmax_role", role)
+      localStorage.setItem("segmax_permissao", role)
+      localStorage.setItem("segmax_nome", data.user.email || "")
+
+      router.replace(destino)
+      router.refresh()
     } catch {
       setErro("Não foi possível entrar no sistema.")
       setLoading(false)
