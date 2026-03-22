@@ -11,7 +11,7 @@ export function normalizarSegmaxRole(valor?: string | null): SegmaxRole {
   const v = (valor || "").toLowerCase().trim()
 
   if (v.includes("master_corretora")) return "master_corretora"
-  if (v.includes("master")) return "master"
+  if (v === "master") return "master"
   if (v.includes("tecn")) return "tecnico"
   if (v.includes("finance")) return "financeiro"
   if (v.includes("corretor")) return "corretor"
@@ -21,9 +21,11 @@ export function normalizarSegmaxRole(valor?: string | null): SegmaxRole {
 }
 
 export function getRedirectByRole(role: SegmaxRole) {
-  if (role === "master") return "/dashboard/master"
-  if (role === "master_corretora") return "/dashboard/corretora"
+  if (role === "master") return "/dashboard"
+  if (role === "master_corretora") return "/corretoras"
   if (role === "tecnico") return "/analise-tecnica"
   if (role === "financeiro") return "/financeiro"
+  if (role === "corretor") return "/clientes"
+  if (role === "vendedor") return "/clientes"
   return "/clientes"
 }
