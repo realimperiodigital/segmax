@@ -1,8 +1,70 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
 export default function NovaCorretoraPage() {
+  const router = useRouter();
+
+  const [loading, setLoading] = useState(false);
+
+  const [form, setForm] = useState({
+    nome: "",
+    cnpj: "",
+    email: "",
+    telefone: "",
+    cidade: "",
+    estado: "",
+  });
+
+  function handleChange(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
+  }
+
+  async function handleSubmit(
+    e: React.FormEvent
+  ) {
+    e.preventDefault();
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(
+        "/api/corretoras",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(form),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Erro ao cadastrar");
+      }
+
+      alert("Corretora cadastrada com sucesso!");
+
+      router.push("/corretoras");
+
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao salvar corretora.");
+    }
+
+    setLoading(false);
+  }
+
   return (
     <main
       style={{
@@ -15,33 +77,143 @@ export default function NovaCorretoraPage() {
     >
       <div
         style={{
-          maxWidth: "900px",
+          maxWidth: "700px",
           margin: "0 auto",
-          border: "1px solid rgba(212,175,55,0.25)",
+          border: "1px solid #27272a",
           borderRadius: "16px",
           padding: "24px",
-          background: "rgba(255,255,255,0.02)",
+          background: "#0a0a0a",
         }}
       >
         <h1
           style={{
-            fontSize: "32px",
-            marginBottom: "12px",
-            color: "#d4af37",
+            fontSize: "26px",
+            marginBottom: "20px",
+            color: "#facc15",
           }}
         >
           Nova corretora
         </h1>
 
-        <p style={{ fontSize: "16px", lineHeight: 1.6, marginBottom: "16px" }}>
-          Esta tela foi isolada temporariamente para não derrubar o deploy da
-          plataforma.
-        </p>
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+          }}
+        >
+          <Input
+            label="Nome da corretora"
+            name="nome"
+            value={form.nome}
+            onChange={handleChange}
+          />
 
-        <p style={{ fontSize: "14px", opacity: 0.8 }}>
-          Depois que o CRM estiver online, retomamos esta página com calma.
-        </p>
+          <Input
+            label="CNPJ"
+            name="cnpj"
+            value={form.cnpj}
+            onChange={handleChange}
+          />
+
+          <Input
+            label="E-mail"
+            name="email"
+            value={form.email}
+            onChange={handleChange}
+          />
+
+          <Input
+            label="Telefone"
+            name="telefone"
+            value={form.telefone}
+            onChange={handleChange}
+          />
+
+          <Input
+            label="Cidade"
+            name="cidade"
+            value={form.cidade}
+            onChange={handleChange}
+          />
+
+          <Input
+            label="Estado"
+            name="estado"
+            value={form.estado}
+            onChange={handleChange}
+          />
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              marginTop: "10px",
+              padding: "14px",
+              borderRadius: "12px",
+              border: "none",
+              fontSize: "15px",
+              fontWeight: "bold",
+              background: "#facc15",
+              color: "#000",
+              cursor: "pointer",
+            }}
+          >
+            {loading
+              ? "Salvando..."
+              : "Cadastrar corretora"}
+          </button>
+        </form>
       </div>
     </main>
+  );
+}
+
+function Input({
+  label,
+  name,
+  value,
+  onChange,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "6px",
+      }}
+    >
+      <label
+        style={{
+          fontSize: "13px",
+          color: "#a1a1aa",
+        }}
+      >
+        {label}
+      </label>
+
+      <input
+        name={name}
+        value={value}
+        onChange={onChange}
+        required
+        style={{
+          padding: "12px",
+          borderRadius: "10px",
+          border: "1px solid #27272a",
+          background: "#000",
+          color: "#fff",
+          fontSize: "14px",
+        }}
+      />
+    </div>
   );
 }
