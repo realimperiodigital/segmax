@@ -1,196 +1,136 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
+import { useEffect, useState } from "react";
+
 import {
-  aprovarSolicitacaoExclusao,
-  listarSolicitacoesPendentes,
-  recusarSolicitacaoExclusao,
-} from "@/lib/exclusao-aprovacao"
+  aprovarSolicitacaoExclusaoMaster,
+  listarSolicitacoesPendentesMaster,
+  recusarSolicitacaoCorretora,
+} from "@/lib/exclusao-aprovacao";
 
 type Solicitacao = {
-  id: string
-  modulo: string
-  entidade: string
-  entidade_id: string
-  solicitado_por_nome: string
-  solicitado_por_role: string
-  motivo: string
-  status: string
-  criado_em: string
-  dados_alvo?: any
-}
-
-const MAPA_TABELAS: Record<string, string> = {
-  clientes: "clientes",
-  corretoras: "corretoras",
-  usuarios: "usuarios",
-  seguradoras: "seguradoras",
-  cotacoes: "cotacoes",
-}
+  id: string;
+  tipo?: string;
+  descricao?: string;
+  criado_em?: string;
+  tabela_alvo?: string;
+  tabelaAlvo?: string;
+};
 
 export default function AprovacoesExclusaoPage() {
-  const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
-  const [loading, setLoading] = useState(true)
-  const [processandoId, setProcessandoId] = useState<string | null>(null)
-  const [erro, setErro] = useState("")
+  const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [processandoId, setProcessandoId] = useState<string | null>(null);
 
-  async function carregar() {
+  async function carregarSolicitacoes() {
     try {
-      setErro("")
-      setLoading(true)
-      const data = await listarSolicitacoesPendentes()
-      setSolicitacoes(data)
-    } catch (e: any) {
-      setErro(e.message || "Não foi possível carregar as solicitações.")
+      const lista = await listarSolicitacoesPendentesMaster();
+
+      if (Array.isArray(lista)) {
+        setSolicitacoes(lista as Solicitacao[]);
+      } else {
+        setSolicitacoes([]);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar solicitações:", error);
+      setSolicitacoes([]);
     } finally {
-      setLoading(false)
+      setCarregando(false);
+    }
+  }
+
+  async function aprovar(item: Solicitacao) {
+    try {
+      setProcessandoId(item.id);
+
+      await aprovarSolicitacaoExclusaoMaster({
+        solicitacaoId: item.id,
+        tabelaAlvo: item.tabela_alvo || item.tabelaAlvo || "clientes",
+      });
+
+      await carregarSolicitacoes();
+    } catch (error) {
+      console.error("Erro ao aprovar:", error);
+    } finally {
+      setProcessandoId(null);
+    }
+  }
+
+  async function recusar(item: Solicitacao) {
+    try {
+      setProcessandoId(item.id);
+
+      await recusarSolicitacaoCorretora({
+        solicitacaoId: item.id,
+        motivoRecusa: "Solicitação recusada pelo master.",
+      });
+
+      await carregarSolicitacoes();
+    } catch (error) {
+      console.error("Erro ao recusar:", error);
+    } finally {
+      setProcessandoId(null);
     }
   }
 
   useEffect(() => {
-    carregar()
-  }, [])
+    carregarSolicitacoes();
+  }, []);
 
-  async function handleAprovar(item: Solicitacao) {
-    const confirmar = confirm(
-      `Deseja aprovar a exclusão de ${item.entidade} (${item.entidade_id})?`
-    )
-
-    if (!confirmar) return
-
-    const tabelaAlvo = MAPA_TABELAS[item.modulo]
-
-    if (!tabelaAlvo) {
-      alert("Tabela alvo não mapeada para este módulo.")
-      return
-    }
-
-    try {
-      setProcessandoId(item.id)
-      await aprovarSolicitacaoExclusao({
-        solicitacaoId: item.id,
-        tabelaAlvo,
-      })
-      await carregar()
-    } catch (e: any) {
-      alert(e.message || "Erro ao aprovar solicitação.")
-    } finally {
-      setProcessandoId(null)
-    }
-  }
-
-  async function handleRecusar(item: Solicitacao) {
-    const motivoRecusa = prompt("Digite o motivo da recusa:") || ""
-
-    if (!motivoRecusa.trim()) {
-      alert("Informe o motivo da recusa.")
-      return
-    }
-
-    try {
-      setProcessandoId(item.id)
-      await recusarSolicitacaoExclusao({
-        solicitacaoId: item.id,
-        motivoRecusa,
-      })
-      await carregar()
-    } catch (e: any) {
-      alert(e.message || "Erro ao recusar solicitação.")
-    } finally {
-      setProcessandoId(null)
-    }
+  if (carregando) {
+    return <div className="p-6">Carregando solicitações...</div>;
   }
 
   return (
-    <main className="min-h-screen bg-black px-6 py-8 text-white md:px-8">
-      <section className="rounded-[28px] border border-[#3a2a00] bg-[#050505] p-7">
-        <h1 className="text-4xl font-bold">Aprovação de exclusões</h1>
-        <p className="mt-3 max-w-3xl text-zinc-400">
-          Aqui o Master aprova ou recusa pedidos de exclusão feitos pelos outros
-          perfis da operação.
-        </p>
-      </section>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">Aprovações de Exclusão</h1>
 
-      <section className="mt-6 rounded-[28px] border border-zinc-800 bg-[#050505] p-6">
-        {loading ? (
-          <div className="py-10 text-center text-zinc-400">
-            Carregando solicitações...
-          </div>
-        ) : erro ? (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-red-300">
-            {erro}
-          </div>
-        ) : solicitacoes.length === 0 ? (
-          <div className="py-10 text-center text-zinc-400">
-            Nenhuma solicitação pendente no momento.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {solicitacoes.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-[24px] border border-zinc-800 bg-black p-5"
-              >
-                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="space-y-3">
-                    <div className="inline-flex rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-yellow-400">
-                      Pendente
-                    </div>
-
-                    <h2 className="text-2xl font-bold">
-                      {item.entidade} • {item.modulo}
-                    </h2>
-
-                    <div className="space-y-1 text-sm text-zinc-400">
-                      <p>
-                        <span className="text-white">ID do registro:</span>{" "}
-                        {item.entidade_id}
-                      </p>
-                      <p>
-                        <span className="text-white">Solicitado por:</span>{" "}
-                        {item.solicitado_por_nome} ({item.solicitado_por_role})
-                      </p>
-                      <p>
-                        <span className="text-white">Motivo:</span> {item.motivo}
-                      </p>
-                      <p>
-                        <span className="text-white">Criado em:</span>{" "}
-                        {new Date(item.criado_em).toLocaleString("pt-BR")}
-                      </p>
-                    </div>
-
-                    {item.dados_alvo ? (
-                      <pre className="mt-4 overflow-auto rounded-2xl border border-zinc-800 bg-[#070707] p-4 text-xs text-zinc-300">
-                        {JSON.stringify(item.dados_alvo, null, 2)}
-                      </pre>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-col gap-3 xl:w-[240px]">
-                    <button
-                      onClick={() => handleAprovar(item)}
-                      disabled={processandoId === item.id}
-                      className="rounded-2xl bg-[#d4a828] px-5 py-4 text-sm font-bold text-black transition hover:brightness-110 disabled:opacity-60"
-                    >
-                      {processandoId === item.id
-                        ? "Processando..."
-                        : "Aprovar exclusão"}
-                    </button>
-
-                    <button
-                      onClick={() => handleRecusar(item)}
-                      disabled={processandoId === item.id}
-                      className="rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm font-bold text-red-300 transition hover:bg-red-500/20 disabled:opacity-60"
-                    >
-                      Recusar solicitação
-                    </button>
-                  </div>
-                </div>
+      {solicitacoes.length === 0 ? (
+        <div className="text-gray-500">Nenhuma solicitação pendente.</div>
+      ) : (
+        <div className="space-y-4">
+          {solicitacoes.map((item) => (
+            <div
+              key={item.id}
+              className="border rounded-lg p-4 space-y-2 bg-white"
+            >
+              <div className="font-semibold">
+                {item.tipo || "Solicitação de exclusão"}
               </div>
-            ))}
-          </div>
-        )}
-      </section>
-    </main>
-  )
+
+              <div className="text-sm text-gray-600">
+                {item.descricao || "Sem descrição informada."}
+              </div>
+
+              <div className="text-xs text-gray-400">
+                {item.criado_em || ""}
+              </div>
+
+              <div className="text-xs text-gray-500">
+                Tabela alvo: {item.tabela_alvo || item.tabelaAlvo || "clientes"}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => aprovar(item)}
+                  disabled={processandoId === item.id}
+                  className="bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                >
+                  {processandoId === item.id ? "Processando..." : "Aprovar"}
+                </button>
+
+                <button
+                  onClick={() => recusar(item)}
+                  disabled={processandoId === item.id}
+                  className="bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                >
+                  {processandoId === item.id ? "Processando..." : "Recusar"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
