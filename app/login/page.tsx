@@ -1,47 +1,22 @@
 "use client"
 
-import { FormEvent, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useActionState, useState } from "react"
 import { Eye, EyeOff, Lock, User2 } from "lucide-react"
-import { supabaseBrowser } from "@/lib/supabase-browser"
+import { loginAction } from "./actions"
+
+type LoginState = {
+  error?: string
+} | null
 
 export default function LoginPage() {
-  const router = useRouter()
-
-  const [login, setLogin] = useState("")
-  const [senha, setSenha] = useState("")
   const [mostrarSenha, setMostrarSenha] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [erro, setErro] = useState("")
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setErro("")
-    setLoading(true)
-
-    try {
-      const email = login.trim().toLowerCase()
-      const password = senha.trim()
-
-      const { data, error } = await supabaseBrowser.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error || !data.user) {
-        setErro("Login ou senha inválidos.")
-        setLoading(false)
-        return
-      }
-
-      router.replace("/dashboard")
-      router.refresh()
-    } catch (error) {
-      console.error("Erro no login:", error)
-      setErro("Não foi possível entrar no sistema.")
-      setLoading(false)
-    }
-  }
+  const [state, formAction, pending] = useActionState<LoginState, FormData>(
+    async (_prevState, formData) => {
+      return await loginAction(formData)
+    },
+    null
+  )
 
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center px-6 py-10">
@@ -64,7 +39,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+        <form action={formAction} className="mt-8 space-y-5">
           <div>
             <label className="mb-2 block text-sm font-medium text-zinc-300">
               Login
@@ -74,11 +49,11 @@ export default function LoginPage() {
               <User2 size={18} className="text-zinc-500" />
               <input
                 type="email"
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
+                name="email"
                 placeholder="Digite seu e-mail"
                 className="w-full bg-transparent text-white outline-none placeholder:text-zinc-500"
                 autoComplete="username"
+                required
               />
             </div>
           </div>
@@ -92,11 +67,11 @@ export default function LoginPage() {
               <Lock size={18} className="text-zinc-500" />
               <input
                 type={mostrarSenha ? "text" : "password"}
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
+                name="password"
                 placeholder="Digite sua senha"
                 className="w-full bg-transparent text-white outline-none placeholder:text-zinc-500"
                 autoComplete="current-password"
+                required
               />
               <button
                 type="button"
@@ -108,18 +83,18 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {erro ? (
+          {state?.error ? (
             <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              {erro}
+              {state.error}
             </div>
           ) : null}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={pending}
             className="w-full rounded-2xl bg-[#d4a828] px-5 py-4 text-sm font-bold text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {loading ? "Entrando..." : "Entrar"}
+            {pending ? "Entrando..." : "Entrar"}
           </button>
         </form>
       </div>
