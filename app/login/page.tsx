@@ -4,15 +4,6 @@ import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, Lock, User2 } from "lucide-react"
 import { supabaseBrowser } from "@/lib/supabase-browser"
-import {
-  getRedirectByRole,
-  normalizarSegmaxRole,
-  type SegmaxRole,
-} from "@/lib/segmax-perfil"
-
-type UsuarioRoleRow = {
-  role: string | null
-}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -43,28 +34,10 @@ export default function LoginPage() {
         return
       }
 
-      const { data: usuarioRow, error: roleError } = await supabaseBrowser
-        .from("usuarios")
-        .select("role")
-        .eq("id", data.user.id)
-        .maybeSingle<UsuarioRoleRow>()
-
-      if (roleError) {
-        setErro("Entrou no auth, mas não consegui localizar o perfil do usuário.")
-        setLoading(false)
-        return
-      }
-
-      const role = normalizarSegmaxRole(usuarioRow?.role)
-      const destino = getRedirectByRole(role as SegmaxRole)
-
-      localStorage.setItem("segmax_role", role)
-      localStorage.setItem("segmax_permissao", role)
-      localStorage.setItem("segmax_nome", data.user.email || "")
-
-      router.replace(destino)
+      router.replace("/dashboard")
       router.refresh()
-    } catch {
+    } catch (error) {
+      console.error("Erro no login:", error)
       setErro("Não foi possível entrar no sistema.")
       setLoading(false)
     }
@@ -87,7 +60,7 @@ export default function LoginPage() {
         <div className="mt-6 text-center">
           <h1 className="text-3xl font-bold">Acesso ao sistema</h1>
           <p className="mt-3 text-sm leading-6 text-zinc-400">
-            Entre com seu login e senha para acessar a área correta da operação.
+            Entre com seu login e senha para acessar o sistema.
           </p>
         </div>
 
