@@ -66,12 +66,10 @@ export async function getUserAccess(): Promise<UserAccess | null> {
     return null
   }
 
-  const corretora_id = data.corretora_id ?? null
-
   return {
     userId: user.id,
     role,
-    corretora_id,
+    corretora_id: data.corretora_id ?? null,
     can: (permission: Permission) => hasPermission(role, permission),
   }
 }
