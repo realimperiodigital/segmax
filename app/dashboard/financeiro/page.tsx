@@ -6,5 +6,5 @@ export default function FinanceiroPage() {
         Área global financeira com permissão controlada.
       </p>
     </main>
-  );
+  )
 }

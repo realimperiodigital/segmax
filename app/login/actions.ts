@@ -43,7 +43,9 @@ export async function loginAction(formData: FormData) {
     .maybeSingle()
 
   if (usuarioError || !usuarioRow?.role) {
-    return { error: "Usuário autenticado, mas sem perfil válido na tabela usuarios." }
+    return {
+      error: "Usuário autenticado, mas sem perfil válido na tabela usuarios.",
+    }
   }
 
   revalidatePath("/", "layout")

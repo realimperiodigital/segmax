@@ -1,86 +1,29 @@
-"use client"
+import { redirect } from "next/navigation"
+import { getUserAccess } from "@/lib/get-user-access"
 
-import { useEffect, useState } from "react"
-import {
-  aprovarSolicitacaoExclusaoMaster,
-  listarSolicitacoesPendentesMaster,
-} from "@/lib/exclusao-aprovacao"
+function getDestinoPorRole(role?: string | null) {
+  const r = String(role || "").trim().toLowerCase()
 
-type Solicitacao = {
-  id: string
-  modulo: string
-  entidade: string
-  entidade_id: string
-  solicitado_por_nome: string
-  solicitado_por_role: string
-  motivo: string
-  status: string
-  criado_em: string
-  dados_alvo?: any
-  aprovacao_nivel?: string
-  aprovador_destino?: string
+  if (r === "master") return null
+  if (r === "financeiro") return "/dashboard/financeiro"
+  if (r === "tecnico") return "/dashboard/tecnico"
+  if (r === "master_corretora") return "/dashboard/corretora"
+  if (r === "usuario") return "/dashboard/usuario"
+
+  return "/login"
 }
 
-const MAPA_TABELAS: Record<string, string> = {
-  clientes: "clientes",
-  cotacoes: "cotacoes",
-  usuarios: "usuarios",
-  corretoras: "corretoras",
-  seguradoras: "seguradoras",
-}
+export default async function DashboardPage() {
+  const access = await getUserAccess()
 
-export default function AprovacoesMasterPage() {
-  const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
-  const [loading, setLoading] = useState(true)
-  const [erro, setErro] = useState("")
-  const [processandoId, setProcessandoId] = useState<string | null>(null)
-
-  async function carregar() {
-    try {
-      setErro("")
-      setLoading(true)
-
-      const data = await listarSolicitacoesPendentesMaster()
-      setSolicitacoes(data)
-    } catch (e: any) {
-      setErro(e.message || "Erro ao carregar solicitações.")
-    } finally {
-      setLoading(false)
-    }
+  if (!access) {
+    redirect("/login")
   }
 
-  useEffect(() => {
-    carregar()
-  }, [])
+  const destino = getDestinoPorRole(access.role)
 
-  async function handleAprovar(item: Solicitacao) {
-    const confirmar = confirm(
-      `Deseja aprovar a exclusão de ${item.entidade} (${item.entidade_id})?`
-    )
-
-    if (!confirmar) return
-
-    const tabelaAlvo = MAPA_TABELAS[item.modulo]
-
-    if (!tabelaAlvo) {
-      alert(`O módulo "${item.modulo}" não está mapeado para exclusão.`)
-      return
-    }
-
-    try {
-      setProcessandoId(item.id)
-
-      await aprovarSolicitacaoExclusaoMaster({
-        solicitacaoId: item.id,
-        tabelaAlvo,
-      })
-
-      await carregar()
-    } catch (e: any) {
-      alert(e.message || "Erro ao aprovar solicitação.")
-    } finally {
-      setProcessandoId(null)
-    }
+  if (destino) {
+    redirect(destino)
   }
 
   return (
@@ -93,79 +36,9 @@ export default function AprovacoesMasterPage() {
       </section>
 
       <section className="mt-6 rounded-[28px] border border-zinc-800 bg-[#050505] p-6">
-        {loading ? (
-          <div className="py-10 text-center text-zinc-400">
-            Carregando solicitações...
-          </div>
-        ) : erro ? (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-red-300">
-            {erro}
-          </div>
-        ) : solicitacoes.length === 0 ? (
-          <div className="py-10 text-center text-zinc-400">
-            Nenhuma solicitação pendente para o master.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {solicitacoes.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-[24px] border border-zinc-800 bg-black p-5"
-              >
-                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="space-y-3">
-                    <div className="inline-flex rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-yellow-400">
-                      Pendente master
-                    </div>
-
-                    <h2 className="text-2xl font-bold">
-                      {item.entidade} • {item.modulo}
-                    </h2>
-
-                    <div className="space-y-1 text-sm text-zinc-400">
-                      <p>
-                        <span className="text-white">ID:</span>{" "}
-                        {item.entidade_id}
-                      </p>
-                      <p>
-                        <span className="text-white">Solicitado por:</span>{" "}
-                        {item.solicitado_por_nome} ({item.solicitado_por_role})
-                      </p>
-                      <p>
-                        <span className="text-white">Motivo:</span> {item.motivo}
-                      </p>
-                      <p>
-                        <span className="text-white">Status:</span> {item.status}
-                      </p>
-                      <p>
-                        <span className="text-white">Criado em:</span>{" "}
-                        {new Date(item.criado_em).toLocaleString("pt-BR")}
-                      </p>
-                    </div>
-
-                    {item.dados_alvo ? (
-                      <pre className="mt-4 overflow-auto rounded-2xl border border-zinc-800 bg-[#070707] p-4 text-xs text-zinc-300">
-                        {JSON.stringify(item.dados_alvo, null, 2)}
-                      </pre>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-col gap-3 xl:w-[240px]">
-                    <button
-                      onClick={() => handleAprovar(item)}
-                      disabled={processandoId === item.id}
-                      className="rounded-2xl bg-[#d4a828] px-5 py-4 text-sm font-bold text-black transition hover:brightness-110 disabled:opacity-60"
-                    >
-                      {processandoId === item.id
-                        ? "Processando..."
-                        : "Aprovar exclusão"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="py-10 text-center text-zinc-400">
+          Nenhuma solicitação pendente para o master.
+        </div>
       </section>
     </main>
   )
