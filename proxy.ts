@@ -4,24 +4,19 @@ import { createServerClient } from "@supabase/ssr"
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Ignorar arquivos estáticos
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.includes(".")
   ) {
-    return NextResponse.next()
+    return NextResponse.next({ request })
   }
 
-  // Rotas públicas
-  if (
-    pathname === "/" ||
-    pathname === "/login"
-  ) {
-    return NextResponse.next()
+  if (pathname === "/" || pathname === "/login") {
+    return NextResponse.next({ request })
   }
 
-  let response = NextResponse.next()
+  let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,9 +27,13 @@ export async function proxy(request: NextRequest) {
           return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options) {
+          request.cookies.set({ name, value, ...options })
+          response = NextResponse.next({ request })
           response.cookies.set({ name, value, ...options })
         },
         remove(name: string, options) {
+          request.cookies.set({ name, value: "", ...options })
+          response = NextResponse.next({ request })
           response.cookies.set({ name, value: "", ...options, maxAge: 0 })
         },
       },
@@ -45,7 +44,6 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // NÃO LOGADO → manda pro login
   if (!user) {
     const loginUrl = new URL("/login", request.url)
     return NextResponse.redirect(loginUrl)
