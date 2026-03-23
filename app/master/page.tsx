@@ -1,14 +1,7 @@
-"use client";
+import { redirect } from "next/navigation"
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+export default function MasterPage() {
 
-export default function MasterRedirectPage() {
-  const router = useRouter();
+  redirect("/dashboard/master")
 
-  useEffect(() => {
-    router.replace("/dashboard");
-  }, [router]);
-
-  return null;
 }
