@@ -8,10 +8,28 @@ function getDestinoPorRole(role?: string | null) {
   const r = String(role || "").trim().toLowerCase()
 
   if (r === "master") return "/dashboard"
-  if (r === "financeiro") return "/dashboard/financeiro"
-  if (r === "tecnico") return "/dashboard/tecnico"
-  if (r === "master_corretora") return "/dashboard/corretora"
-  if (r === "usuario") return "/dashboard/usuario"
+
+  if (
+    r === "financeiro" ||
+    r === "diretora_financeira"
+  ) {
+    return "/dashboard/financeiro"
+  }
+
+  if (
+    r === "tecnico" ||
+    r === "diretora_tecnica"
+  ) {
+    return "/dashboard/tecnico"
+  }
+
+  if (r === "master_corretora") {
+    return "/dashboard/corretora"
+  }
+
+  if (r === "usuario") {
+    return "/dashboard/usuario"
+  }
 
   return "/dashboard"
 }
@@ -36,18 +54,21 @@ export async function loginAction(formData: FormData) {
     return { error: "Login ou senha inválidos." }
   }
 
-  const { data: usuarioRow, error: usuarioError } = await supabase
+  const { data: usuarioRow } = await supabase
     .from("usuarios")
     .select("role")
     .eq("id", authData.user.id)
     .maybeSingle()
 
-  if (usuarioError || !usuarioRow?.role) {
+  if (!usuarioRow?.role) {
     return {
-      error: "Usuário autenticado, mas sem perfil válido na tabela usuarios.",
+      error: "Usuário sem role definida.",
     }
   }
 
   revalidatePath("/", "layout")
-  redirect(getDestinoPorRole(usuarioRow.role))
+
+  redirect(
+    getDestinoPorRole(usuarioRow.role)
+  )
 }
