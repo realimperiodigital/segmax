@@ -16,29 +16,43 @@ export default function DashboardTecnicoPage() {
           <Card
             title="Análise Técnica"
             description="Acesse o núcleo técnico para avaliação e parecer operacional."
-            href="/analise-tecnica"
+            href="/dashboard/tecnico/analises"
             linkText="Abrir análise"
           />
 
           <Card
             title="Cotações"
             description="Visualize e acompanhe as cotações disponíveis para análise."
-            href="/cotacoes"
+            href="/dashboard/tecnico/cotacoes"
             linkText="Ver cotações"
           />
 
           <Card
             title="Clientes"
             description="Consulte os clientes vinculados às análises e ao fluxo técnico."
-            href="/clientes"
+            href="/dashboard/tecnico/clientes"
             linkText="Ver clientes"
           />
 
           <Card
             title="Propostas"
             description="Acompanhe propostas em andamento e desdobramentos técnicos."
-            href="/propostas"
+            href="/dashboard/tecnico/propostas"
             linkText="Ver propostas"
+          />
+
+          <Card
+            title="Corretoras"
+            description="Consulte corretoras ligadas ao fluxo técnico sem sair do contexto do painel."
+            href="/dashboard/tecnico/corretoras"
+            linkText="Ver corretoras"
+          />
+
+          <Card
+            title="Seguradoras"
+            description="Acesse a visão técnica de seguradoras dentro da própria árvore do dashboard."
+            href="/dashboard/tecnico/seguradoras"
+            linkText="Ver seguradoras"
           />
         </div>
       </div>

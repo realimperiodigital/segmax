@@ -16,35 +16,35 @@ export default function DashboardFinanceiroPage() {
           <Card
             title="Visão Financeira"
             description="Acompanhe indicadores financeiros, fluxo e status gerais."
-            href="/dashboard/financeiro"
+            href="/dashboard/financeiro/painel"
             linkText="Abrir painel"
           />
 
           <Card
             title="Corretoras"
             description="Acesse informações organizadas das corretoras cadastradas."
-            href="/corretoras"
+            href="/dashboard/financeiro/corretoras"
             linkText="Ver corretoras"
           />
 
           <Card
             title="Clientes"
             description="Consulte clientes vinculados ao fluxo operacional."
-            href="/clientes"
+            href="/dashboard/financeiro/clientes"
             linkText="Ver clientes"
           />
 
           <Card
             title="Cotações"
             description="Acompanhe cotações vinculadas ao processo comercial."
-            href="/cotacoes"
+            href="/dashboard/financeiro/cotacoes"
             linkText="Ver cotações"
           />
 
           <Card
             title="Propostas"
             description="Visualize propostas e evolução do pipeline comercial."
-            href="/propostas"
+            href="/dashboard/financeiro/propostas"
             linkText="Ver propostas"
           />
         </div>
