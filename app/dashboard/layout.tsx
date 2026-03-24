@@ -1,15 +1,20 @@
 import { ReactNode } from "react"
 import { redirect } from "next/navigation"
-import { getUserAccess } from "@/lib/get-user-access"
+import { createClient } from "@/lib/supabase/server"
 
 export default async function DashboardLayout({
   children,
 }: {
   children: ReactNode
 }) {
-  const access = await getUserAccess()
+  const supabase = await createClient()
 
-  if (!access) {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  if (error || !user) {
     redirect("/login")
   }
 

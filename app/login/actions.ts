@@ -4,71 +4,72 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 
-function getDestinoPorRole(role?: string | null) {
-  const r = String(role || "").trim().toLowerCase()
+function getDestinoPorRole(role: string) {
+  const normalized = String(role || "").trim().toLowerCase()
 
-  if (r === "master") return "/dashboard"
+  switch (normalized) {
+    case "master":
+      return "/dashboard/master"
 
-  if (
-    r === "financeiro" ||
-    r === "diretora_financeira"
-  ) {
-    return "/dashboard/financeiro"
+    case "diretora_tecnica":
+      return "/dashboard/tecnico"
+
+    case "diretora_financeira":
+      return "/dashboard/financeiro"
+
+    case "corretora_admin":
+      return "/dashboard/corretora"
+
+    case "corretora":
+      return "/dashboard/corretora"
+
+    case "usuario":
+      return "/dashboard/usuario"
+
+    default:
+      return "/dashboard"
   }
-
-  if (
-    r === "tecnico" ||
-    r === "diretora_tecnica"
-  ) {
-    return "/dashboard/tecnico"
-  }
-
-  if (r === "master_corretora") {
-    return "/dashboard/corretora"
-  }
-
-  if (r === "usuario") {
-    return "/dashboard/usuario"
-  }
-
-  return "/dashboard"
 }
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase()
-  const password = String(formData.get("password") || "").trim()
+  const password = String(formData.get("password") || "")
 
   if (!email || !password) {
-    return { error: "Informe e-mail e senha." }
+    redirect("/login?error=Informe%20email%20e%20senha")
   }
 
   const supabase = await createClient()
 
-  const { data: authData, error: authError } =
-    await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
 
-  if (authError || !authData.user) {
-    return { error: "Login ou senha inválidos." }
+  if (signInError) {
+    redirect("/login?error=Credenciais%20inv%C3%A1lidas")
   }
 
-  const { data: usuarioRow } = await supabase
-    .from("usuarios")
-    .select("role")
-    .eq("id", authData.user.id)
-    .maybeSingle()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-  if (!usuarioRow?.role) {
-    return {
-      error: "Usuário sem role definida.",
-    }
+  if (userError || !user) {
+    redirect("/login?error=Falha%20ao%20validar%20sess%C3%A3o")
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile?.role) {
+    redirect("/login?error=Perfil%20n%C3%A3o%20encontrado")
   }
 
   revalidatePath("/", "layout")
 
-  redirect(
-    getDestinoPorRole(usuarioRow.role)
-  )
+  redirect(getDestinoPorRole(profile.role))
 }
