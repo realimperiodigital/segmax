@@ -9,11 +9,13 @@ export default function DashboardFinanceiroClientesPage() {
             <p className="text-sm uppercase tracking-[0.25em] text-yellow-500">
               Financeiro
             </p>
+
             <h1 className="mt-2 text-3xl font-bold text-yellow-400">
               Clientes do Financeiro
             </h1>
+
             <p className="mt-3 text-white/75">
-              Visão financeira dedicada para clientes ligados ao fluxo operacional.
+              Área financeira dedicada para visualização dos clientes ligados ao fluxo operacional.
             </p>
           </div>
 
@@ -23,6 +25,16 @@ export default function DashboardFinanceiroClientesPage() {
           >
             Voltar ao painel
           </Link>
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-yellow-500/20 bg-white/5 p-6 shadow-xl">
+          <h2 className="text-xl font-semibold text-yellow-400">
+            Área de clientes
+          </h2>
+
+          <p className="mt-3 text-white/75">
+            Aqui ficará a visão financeira dos clientes, com foco em acompanhamento administrativo e operacional.
+          </p>
         </div>
       </div>
     </main>
