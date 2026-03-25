@@ -1,7 +1,7 @@
-export default function ClienteDetalhePage() {
+export default function Page() {
   return (
-    <div>
-      Cliente detalhe OK
-    </div>
+    <main>
+      <h1>Página OK</h1>
+    </main>
   )
 }
