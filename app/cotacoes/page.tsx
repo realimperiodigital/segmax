@@ -1,255 +1,165 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowRight,
-  ClipboardList,
-  Eye,
-  FileText,
-  Plus,
-  Search,
-  ShieldCheck,
-} from "lucide-react";
-
-import SegmaxShell, { SegmaxMenuItem } from "@/components/segmaxshell";
+import SegmaxShell from "@/components/segmaxshell";
+import { Plus, Search, FileText } from "lucide-react";
 
 type StatusCotacao =
   | "Nova"
   | "Em análise"
   | "Aguardando seguradora"
-  | "Proposta enviada"
+  | "Proposta pronta"
   | "Fechada"
   | "Recusada";
 
 type Cotacao = {
   id: string;
-  cliente: string;
-  corretora: string;
-  ramo: string;
-  seguradora: string;
-  responsavel: string;
-  valor: string;
-  status: StatusCotacao;
+  numero?: string | null;
+  titulo?: string | null;
+  cliente_nome?: string | null;
+  corretora_nome?: string | null;
+  status?: StatusCotacao | null;
+  created_at?: string | null;
 };
 
-const menuItems: SegmaxMenuItem[] = [
-  { label: "Centro de Controle", href: "/dashboard", exact: true },
-  { label: "Corretoras", href: "/corretoras" },
-  { label: "Usuários", href: "/usuarios" },
-  { label: "Clientes", href: "/clientes" },
-  { label: "Seguradoras", href: "/seguradoras" },
-  { label: "Cotações", href: "/cotacoes" },
-  { label: "Análise Técnica", href: "/analise-tecnica" },
-  { label: "Financeiro", href: "/financeiro" },
-];
-
-const cotacoesBase: Cotacao[] = [
-  {
-    id: "1",
-    cliente: "Grupo Alpha Logística",
-    corretora: "Prime Broker",
-    ramo: "Patrimonial Empresarial",
-    seguradora: "Porto Seguro",
-    responsavel: "Carlos Mendes",
-    valor: "R$ 3.200.000",
-    status: "Em análise",
-  },
-  {
-    id: "2",
-    cliente: "Metalúrgica Horizonte",
-    corretora: "Atlas Corretora",
-    ramo: "Patrimonial Industrial",
-    seguradora: "Tokio Marine",
-    responsavel: "Fernanda Lima",
-    valor: "R$ 5.800.000",
-    status: "Aguardando seguradora",
-  },
-  {
-    id: "3",
-    cliente: "Rede Nova Visão",
-    corretora: "Alpha Consult",
-    ramo: "Patrimonial Comercial",
-    seguradora: "Allianz",
-    responsavel: "Juliana Prado",
-    valor: "R$ 2.100.000",
-    status: "Proposta enviada",
-  },
-  {
-    id: "4",
-    cliente: "Construtora Vale Forte",
-    corretora: "Prime Broker",
-    ramo: "Patrimonial Construção",
-    seguradora: "Mapfre",
-    responsavel: "Carlos Mendes",
-    valor: "R$ 7.500.000",
-    status: "Nova",
-  },
-];
-
-function SectionCard({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-[28px] border border-[#d4af37]/14 bg-black/45 p-6 backdrop-blur-sm">
-      {children}
-    </section>
-  );
-}
-
-function StatusBadge({ status }: { status: StatusCotacao }) {
-  const styles: Record<StatusCotacao, string> = {
-    Nova: "border-sky-500/30 bg-sky-500/10 text-sky-300",
-    "Em análise": "border-amber-500/30 bg-amber-500/10 text-amber-300",
-    "Aguardando seguradora": "border-purple-500/30 bg-purple-500/10 text-purple-300",
-    "Proposta enviada": "border-blue-500/30 bg-blue-500/10 text-blue-300",
-    Fechada: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-    Recusada: "border-red-500/30 bg-red-500/10 text-red-300",
-  };
-
-  return (
-    <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${styles[status]}`}>
-      {status}
-    </span>
-  );
-}
-
 export default function CotacoesPage() {
+  const [cotacoes, setCotacoes] = useState<Cotacao[]>([]);
   const [busca, setBusca] = useState("");
 
-  const cotacoes = useMemo(() => {
+  useEffect(() => {
+    async function carregarCotacoes() {
+      try {
+        const response = await fetch("/api/cotacoes", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Erro ao carregar cotações");
+        }
+
+        const data = await response.json();
+        setCotacoes(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Erro ao buscar cotações:", error);
+        setCotacoes([]);
+      }
+    }
+
+    carregarCotacoes();
+  }, []);
+
+  const cotacoesFiltradas = cotacoes.filter((cotacao) => {
     const termo = busca.toLowerCase();
 
-    return cotacoesBase.filter((c) =>
-      c.cliente.toLowerCase().includes(termo) ||
-      c.corretora.toLowerCase().includes(termo) ||
-      c.ramo.toLowerCase().includes(termo)
+    return (
+      cotacao.numero?.toLowerCase().includes(termo) ||
+      cotacao.titulo?.toLowerCase().includes(termo) ||
+      cotacao.cliente_nome?.toLowerCase().includes(termo) ||
+      cotacao.corretora_nome?.toLowerCase().includes(termo) ||
+      cotacao.status?.toLowerCase().includes(termo)
     );
-  }, [busca]);
+  });
 
   return (
-    <SegmaxShell
-      title="Gestão de Cotações"
-      subtitle="Controle técnico e comercial das propostas de seguros."
-      username="Renato"
-      userrole="Super Master"
-      menuitems={menuItems}
-      actions={
-        <>
-          <Link
-            href="/cotacoes/nova"
-            className="inline-flex items-center gap-2 rounded-2xl border border-[#d4af37] bg-[#d4af37] px-5 py-3 text-sm font-semibold text-black"
-          >
-            <Plus size={18} />
-            Nova cotação
-          </Link>
-
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 rounded-2xl border border-[#d4af37]/25 px-5 py-3 text-sm text-white"
-          >
-            <ArrowRight size={18} />
-            Voltar
-          </Link>
-        </>
-      }
-    >
-
-      <SectionCard>
-
-        <div className="flex items-center justify-between border-b border-white/10 pb-6">
-
-          <h2 className="text-xl font-semibold text-white">
-            Cotações registradas
-          </h2>
-
-          <div className="flex items-center gap-2 border border-white/10 rounded-xl px-3 py-2">
-            <Search size={16} className="text-zinc-400"/>
-            <input
-              placeholder="Buscar cotação"
-              value={busca}
-              onChange={(e)=>setBusca(e.target.value)}
-              className="bg-transparent outline-none text-sm text-white"
-            />
+    <SegmaxShell role="master">
+      <div className="p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <FileText className="h-6 w-6 text-amber-500" />
+            <h1 className="text-2xl font-semibold text-white">Cotações</h1>
           </div>
 
+          <Link
+            href="/cotacoes/nova"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition hover:bg-amber-700"
+          >
+            <Plus className="h-4 w-4" />
+            Nova Cotação
+          </Link>
         </div>
 
-        <div className="mt-6 overflow-x-auto">
+        <div className="mb-6 flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2">
+          <Search className="h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar cotação..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full bg-transparent text-sm text-white outline-none"
+          />
+        </div>
 
-          <table className="w-full border-separate border-spacing-y-3">
-
-            <thead>
-
+        <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-800 text-gray-300">
               <tr>
-                <th className="text-left text-xs text-zinc-500 uppercase">Cliente</th>
-                <th className="text-left text-xs text-zinc-500 uppercase">Corretora</th>
-                <th className="text-left text-xs text-zinc-500 uppercase">Ramo</th>
-                <th className="text-left text-xs text-zinc-500 uppercase">Seguradora</th>
-                <th className="text-left text-xs text-zinc-500 uppercase">Responsável</th>
-                <th className="text-left text-xs text-zinc-500 uppercase">Valor</th>
-                <th className="text-left text-xs text-zinc-500 uppercase">Status</th>
-                <th className="text-right text-xs text-zinc-500 uppercase">Ações</th>
+                <th className="px-4 py-3 text-left">Número</th>
+                <th className="px-4 py-3 text-left">Título</th>
+                <th className="px-4 py-3 text-left">Cliente</th>
+                <th className="px-4 py-3 text-left">Corretora</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Criada em</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
-
             </thead>
 
             <tbody>
-
-              {cotacoes.map((cotacao)=>(
-                <tr key={cotacao.id}>
-
-                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5 rounded-l-xl">
-                    {cotacao.cliente}
+              {cotacoesFiltradas.map((cotacao) => (
+                <tr
+                  key={cotacao.id}
+                  className="border-t border-zinc-800 transition hover:bg-zinc-800"
+                >
+                  <td className="px-4 py-3 text-white">
+                    {cotacao.numero || "-"}
                   </td>
 
-                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
-                    {cotacao.corretora}
+                  <td className="px-4 py-3 text-white">
+                    {cotacao.titulo || "-"}
                   </td>
 
-                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
-                    {cotacao.ramo}
+                  <td className="px-4 py-3 text-gray-400">
+                    {cotacao.cliente_nome || "-"}
                   </td>
 
-                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
-                    {cotacao.seguradora}
+                  <td className="px-4 py-3 text-gray-400">
+                    {cotacao.corretora_nome || "-"}
                   </td>
 
-                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
-                    {cotacao.responsavel}
+                  <td className="px-4 py-3">
+                    <span className="rounded bg-amber-600 px-2 py-1 text-xs text-white">
+                      {cotacao.status || "Nova"}
+                    </span>
                   </td>
 
-                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
-                    {cotacao.valor}
+                  <td className="px-4 py-3 text-gray-400">
+                    {cotacao.created_at
+                      ? new Date(cotacao.created_at).toLocaleDateString("pt-BR")
+                      : "-"}
                   </td>
 
-                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5">
-                    <StatusBadge status={cotacao.status}/>
-                  </td>
-
-                  <td className="px-4 py-4 bg-white/[0.03] border border-white/5 rounded-r-xl text-right">
+                  <td className="px-4 py-3 text-right">
                     <Link
                       href={`/cotacoes/${cotacao.id}`}
-                      className="text-sm text-[#d4af37] inline-flex items-center gap-1"
+                      className="text-sm text-amber-500 hover:text-amber-400"
                     >
-                      <Eye size={16}/>
                       Abrir
                     </Link>
                   </td>
-
                 </tr>
               ))}
 
+              {cotacoesFiltradas.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-10 text-center text-gray-500">
+                    Nenhuma cotação encontrada
+                  </td>
+                </tr>
+              )}
             </tbody>
-
           </table>
-
         </div>
-
-      </SectionCard>
-
+      </div>
     </SegmaxShell>
   );
 }
