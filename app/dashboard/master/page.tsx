@@ -1,78 +1,72 @@
 import Link from "next/link"
 
-const modules = [
+type ModuleCardProps = {
+  title: string
+  description: string
+  href: string
+  actionLabel: string
+}
+
+const modules: ModuleCardProps[] = [
   {
     title: "Cadastrar corretora",
     description: "Abra direto o cadastro de uma nova corretora.",
     href: "/dashboard/master/corretoras/nova",
-    action: "Abrir cadastro",
+    actionLabel: "Abrir cadastro",
   },
   {
     title: "Corretoras",
     description: "Ver lista, editar, ativar, bloquear e revisar dados.",
     href: "/dashboard/master/corretoras",
-    action: "Abrir lista",
+    actionLabel: "Abrir lista",
   },
   {
     title: "Usuários",
     description: "Gerenciar acessos, perfis e permissões do sistema.",
     href: "/dashboard/master/usuarios",
-    action: "Abrir usuários",
+    actionLabel: "Abrir usuários",
   },
   {
     title: "Clientes",
     description: "Consultar e administrar a base de clientes.",
     href: "/dashboard/master/clientes",
-    action: "Abrir clientes",
+    actionLabel: "Abrir clientes",
   },
   {
     title: "Cotações",
     description: "Entrar na central de cotações sem rota quebrada.",
     href: "/dashboard/master/cotacoes",
-    action: "Abrir cotações",
+    actionLabel: "Abrir cotações",
   },
   {
     title: "Análise técnica",
     description: "Abrir análises, revisões e pareceres técnicos.",
     href: "/dashboard/master/analises",
-    action: "Abrir análises",
+    actionLabel: "Abrir análises",
   },
   {
     title: "Propostas",
     description: "Acompanhar propostas, status e fluxo comercial.",
     href: "/dashboard/master/propostas",
-    action: "Abrir propostas",
+    actionLabel: "Abrir propostas",
   },
   {
     title: "Financeiro",
     description: "Ver repasses, fechamento e controle financeiro.",
     href: "/dashboard/master/financeiro",
-    action: "Abrir financeiro",
+    actionLabel: "Abrir financeiro",
   },
   {
     title: "Aprovações de exclusão",
     description: "Validar ou recusar pedidos de exclusão da operação.",
     href: "/dashboard/master/aprovacoes-exclusao",
-    action: "Abrir aprovações",
+    actionLabel: "Abrir aprovações",
   },
   {
     title: "Auditoria",
     description: "Monitorar histórico, ações e rastreabilidade do sistema.",
     href: "/dashboard/master/auditoria",
-    action: "Abrir auditoria",
-  },
-]
-
-const quickActions = [
-  {
-    label: "Cadastrar corretora",
-    href: "/dashboard/master/corretoras/nova",
-    primary: true,
-  },
-  {
-    label: "Cotações",
-    href: "/dashboard/master/cotacoes",
-    primary: false,
+    actionLabel: "Abrir auditoria",
   },
 ]
 
@@ -99,20 +93,19 @@ export default function MasterPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {quickActions.map((action) => (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  className={[
-                    "rounded-2xl px-6 py-4 text-base font-semibold transition",
-                    action.primary
-                      ? "border border-yellow-500/30 bg-yellow-500/10 text-white hover:bg-yellow-500/20"
-                      : "border border-zinc-800 bg-zinc-900 text-white hover:border-zinc-700 hover:bg-zinc-800",
-                  ].join(" ")}
-                >
-                  {action.label}
-                </Link>
-              ))}
+              <Link
+                href="/dashboard/master/corretoras/nova"
+                className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-6 py-4 text-base font-semibold text-white transition hover:bg-yellow-500/20"
+              >
+                Cadastrar corretora
+              </Link>
+
+              <Link
+                href="/dashboard/master/cotacoes"
+                className="rounded-2xl border border-zinc-800 bg-zinc-900 px-6 py-4 text-base font-semibold text-white transition hover:border-zinc-700 hover:bg-zinc-800"
+              >
+                Cotações
+              </Link>
             </div>
           </div>
         </section>
@@ -124,7 +117,7 @@ export default function MasterPage() {
               title={module.title}
               description={module.description}
               href={module.href}
-              action={module.action}
+              actionLabel={module.actionLabel}
             />
           ))}
         </section>
@@ -137,13 +130,8 @@ function ModuleCard({
   title,
   description,
   href,
-  action,
-}: {
-  title: string
-  description: string
-  href: string
-  action: string
-}) {
+  actionLabel,
+}: ModuleCardProps) {
   return (
     <section className="rounded-[28px] border border-zinc-800 bg-[#05070c] p-6 transition hover:border-yellow-500/20">
       <h2 className="text-2xl font-semibold text-white">{title}</h2>
@@ -156,7 +144,7 @@ function ModuleCard({
         href={href}
         className="mt-6 inline-flex items-center gap-2 text-lg font-semibold text-yellow-400 transition hover:text-yellow-300"
       >
-        {action}
+        {actionLabel}
         <span aria-hidden>→</span>
       </Link>
     </section>
