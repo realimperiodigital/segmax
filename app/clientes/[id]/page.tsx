@@ -1,485 +1,148 @@
 "use client";
 
+import React, { useEffect, useState } from "react";
+import SegmaxShell from "@/components/segmaxshell";
+import { Plus, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
-type ClienteDetalhe = {
+type Cliente = {
   id: string;
-  nome: string | null;
-  tipo_pessoa: string | null;
-  cpf_cnpj: string | null;
-  email: string | null;
-  telefone: string | null;
-  cidade: string | null;
-  estado: string | null;
-  ativo: boolean | null;
-  observacoes: string | null;
-  created_at: string | null;
-  excluido?: boolean | null;
+  nome: string;
+  email?: string;
+  telefone?: string;
+  status?: "Ativo" | "Em análise" | "Inativo";
 };
 
-type CotacaoCliente = {
-  id: string;
-  cliente_id: string | null;
-  status: string | null;
-  seguradora: string | null;
-  ramo: string | null;
-  valor: number | string | null;
-  created_at: string | null;
-};
+export default function ClientesPage() {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [busca, setBusca] = useState("");
 
-function formatarTipoPessoa(tipo?: string | null) {
-  if (!tipo) return "-";
-  if (tipo.toLowerCase() === "pf") return "Pessoa Física";
-  if (tipo.toLowerCase() === "pj") return "Pessoa Jurídica";
-  return tipo;
-}
-
-function formatarData(data?: string | null) {
-  if (!data) return "-";
-  try {
-    return new Date(data).toLocaleDateString("pt-BR");
-  } catch {
-    return "-";
-  }
-}
-
-function formatarMoeda(valor?: number | string | null) {
-  if (valor === null || valor === undefined || valor === "") return "-";
-
-  const numero =
-    typeof valor === "number"
-      ? valor
-      : Number(String(valor).replace(/\./g, "").replace(",", "."));
-
-  if (Number.isNaN(numero)) return String(valor);
-
-  return numero.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
-function corStatus(status?: string | null) {
-  const s = (status || "").toLowerCase();
-
-  if (
-    s.includes("fech") ||
-    s.includes("aprov") ||
-    s.includes("emitid") ||
-    s.includes("ganha")
-  ) {
-    return "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20";
-  }
-
-  if (
-    s.includes("analise") ||
-    s.includes("andamento") ||
-    s.includes("pendente") ||
-    s.includes("aberta") ||
-    s.includes("negoci")
-  ) {
-    return "bg-yellow-500/10 text-yellow-400 ring-1 ring-yellow-500/20";
-  }
-
-  if (
-    s.includes("recus") ||
-    s.includes("perd") ||
-    s.includes("cancel")
-  ) {
-    return "bg-red-500/10 text-red-300 ring-1 ring-red-500/20";
-  }
-
-  return "bg-zinc-500/10 text-zinc-300 ring-1 ring-zinc-500/20";
-}
-
-export default function ClienteDetalhePage() {
-  const router = useRouter();
-  const params = useParams();
-  const clienteId = String(params?.id || "");
-
-  const [cliente, setCliente] = useState<ClienteDetalhe | null>(null);
-  const [cotacoes, setCotacoes] = useState<CotacaoCliente[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
-
-  async function carregarTela() {
+  async function carregarClientes() {
     try {
-      setCarregando(true);
-      setErro("");
+      const response = await fetch("/api/clientes");
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.push("/login");
-        return;
+      if (!response.ok) {
+        throw new Error("Erro ao carregar clientes");
       }
 
-      const { data: clienteData, error: clienteError } = await supabase
-        .from("clientes")
-        .select(
-          "id, nome, tipo_pessoa, cpf_cnpj, email, telefone, cidade, estado, ativo, observacoes, created_at, excluido"
-        )
-        .eq("id", clienteId)
-        .maybeSingle();
-
-      if (clienteError) {
-        setErro(clienteError.message);
-        return;
-      }
-
-      if (!clienteData) {
-        setErro("Cliente não encontrado.");
-        return;
-      }
-
-      if (clienteData.excluido) {
-        setErro("Este cliente está marcado como excluído.");
-        return;
-      }
-
-      setCliente(clienteData as ClienteDetalhe);
-
-      const { data: cotacoesData, error: cotacoesError } = await supabase
-        .from("cotacoes")
-        .select("id, cliente_id, status, seguradora, ramo, valor, created_at")
-        .eq("cliente_id", clienteId)
-        .order("created_at", { ascending: false });
-
-      if (cotacoesError) {
-        console.error(cotacoesError);
-        setCotacoes([]);
-      } else {
-        setCotacoes((cotacoesData || []) as CotacaoCliente[]);
-      }
-    } catch (e) {
-      console.error(e);
-      setErro("Não foi possível carregar a visão do cliente.");
-    } finally {
-      setCarregando(false);
+      const data = await response.json();
+      setClientes(data || []);
+    } catch (error) {
+      console.error("Erro ao buscar clientes:", error);
     }
   }
 
   useEffect(() => {
-    if (clienteId) {
-      carregarTela();
-    }
-  }, [clienteId]);
+    carregarClientes();
+  }, []);
 
-  const resumo = useMemo(() => {
-    let abertas = 0;
-    let fechadas = 0;
-    let recusadas = 0;
-
-    for (const item of cotacoes) {
-      const s = (item.status || "").toLowerCase();
-
-      if (
-        s.includes("fech") ||
-        s.includes("aprov") ||
-        s.includes("emitid") ||
-        s.includes("ganha")
-      ) {
-        fechadas += 1;
-      } else if (
-        s.includes("recus") ||
-        s.includes("perd") ||
-        s.includes("cancel")
-      ) {
-        recusadas += 1;
-      } else {
-        abertas += 1;
-      }
-    }
-
-    return {
-      total: cotacoes.length,
-      abertas,
-      fechadas,
-      recusadas,
-    };
-  }, [cotacoes]);
-
-  if (carregando) {
-    return (
-      <div className="min-h-screen bg-[#050505] px-5 py-5 text-white md:px-8">
-        <div className="mx-auto max-w-[1450px]">
-          <div className="rounded-[30px] border border-yellow-600/15 bg-[#0a0a0a] p-10 text-center text-zinc-400">
-            Carregando visão do cliente...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (erro || !cliente) {
-    return (
-      <div className="min-h-screen bg-[#050505] px-5 py-5 text-white md:px-8">
-        <div className="mx-auto max-w-[1450px] space-y-5">
-          <div className="rounded-[30px] border border-red-500/20 bg-red-500/10 p-6 text-red-300">
-            {erro || "Cliente não encontrado."}
-          </div>
-
-          <Link
-            href="/clientes"
-            className="inline-flex rounded-xl border border-zinc-700 bg-[#111111] px-5 py-3 text-sm font-semibold text-white transition hover:border-yellow-500/30 hover:bg-[#151515]"
-          >
-            Voltar para clientes
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const clientesFiltrados = clientes.filter((cliente) =>
+    cliente.nome?.toLowerCase().includes(busca.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-[#050505] px-5 py-5 text-white md:px-8">
-      <div className="mx-auto max-w-[1450px] space-y-5">
-        {/* HERO */}
-        <section className="rounded-[30px] border border-yellow-600/15 bg-[#080808] px-6 py-7 shadow-[0_0_40px_rgba(0,0,0,0.35)] md:px-9">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-4xl">
-              <div className="mb-4 inline-flex rounded-full border border-yellow-600/20 bg-[#111111] px-4 py-2 text-sm font-semibold text-yellow-400">
-                Cliente 360°
-              </div>
+    <SegmaxShell role="master">
+      <div className="p-6">
 
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-zinc-500">
-                SegMax Control
-              </p>
+        {/* HEADER */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-semibold text-white">
+            Clientes
+          </h1>
 
-              <h1 className="mt-4 text-4xl font-bold leading-[1] md:text-6xl">
-                {cliente.nome || "Cliente"}
-              </h1>
+          <Link
+            href="/clientes/novo"
+            className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition"
+          >
+            <Plus className="w-4 h-4" />
+            Novo Cliente
+          </Link>
+        </div>
 
-              <p className="mt-5 max-w-3xl text-base leading-8 text-zinc-300 md:text-lg">
-                Visão completa do cliente com dados cadastrais, andamento operacional e histórico
-                de cotações para acompanhar a carteira de forma clara e intuitiva.
-              </p>
-            </div>
+        {/* BUSCA */}
+        <div className="flex items-center gap-2 mb-6 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
+          <Search className="w-4 h-4 text-gray-400" />
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/clientes"
-                className="rounded-xl border border-zinc-700 bg-[#111111] px-5 py-3 text-sm font-semibold text-white transition hover:border-yellow-500/30 hover:bg-[#151515]"
-              >
-                Voltar
-              </Link>
+          <input
+            type="text"
+            placeholder="Buscar cliente..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="bg-transparent outline-none text-sm text-white w-full"
+          />
+        </div>
 
-              <Link
-                href={`/clientes/${clienteId}/editar`}
-                className="rounded-xl border border-zinc-700 bg-[#111111] px-5 py-3 text-sm font-semibold text-white transition hover:border-yellow-500/30 hover:bg-[#151515]"
-              >
-                Editar cliente
-              </Link>
+        {/* LISTA */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
 
-              <Link
-                href={`/cotacoes/nova?cliente=${clienteId}`}
-                className="rounded-xl bg-yellow-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-yellow-400"
-              >
-                Nova cotação
-              </Link>
+          <table className="w-full text-sm">
 
-              <Link
-                href={`/relatorios/analitico?cliente=${clienteId}`}
-                className="rounded-xl border border-zinc-700 bg-[#111111] px-5 py-3 text-sm font-semibold text-white transition hover:border-yellow-500/30 hover:bg-[#151515]"
-              >
-                Relatório analítico
-              </Link>
-            </div>
-          </div>
-        </section>
+            <thead className="bg-zinc-800 text-gray-300">
+              <tr>
+                <th className="text-left px-4 py-3">Nome</th>
+                <th className="text-left px-4 py-3">Email</th>
+                <th className="text-left px-4 py-3">Telefone</th>
+                <th className="text-left px-4 py-3">Status</th>
+                <th className="text-right px-4 py-3">Ações</th>
+              </tr>
+            </thead>
 
-        {/* CARDS */}
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
-            <p className="text-sm text-zinc-400">Tipo</p>
-            <h3 className="mt-2 text-3xl font-bold">{formatarTipoPessoa(cliente.tipo_pessoa)}</h3>
-          </div>
+            <tbody>
 
-          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
-            <p className="text-sm text-zinc-400">Status do cliente</p>
-            <h3 className="mt-2 text-3xl font-bold">{cliente.ativo ? "Ativo" : "Inativo"}</h3>
-          </div>
+              {clientesFiltrados.map((cliente) => (
+                <tr
+                  key={cliente.id}
+                  className="border-t border-zinc-800 hover:bg-zinc-800 transition"
+                >
+                  <td className="px-4 py-3 text-white">
+                    {cliente.nome}
+                  </td>
 
-          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
-            <p className="text-sm text-zinc-400">Total de cotações</p>
-            <h3 className="mt-2 text-3xl font-bold">{resumo.total}</h3>
-          </div>
+                  <td className="px-4 py-3 text-gray-400">
+                    {cliente.email || "-"}
+                  </td>
 
-          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
-            <p className="text-sm text-yellow-500">Em andamento</p>
-            <h3 className="mt-2 text-3xl font-bold text-yellow-400">{resumo.abertas}</h3>
-          </div>
+                  <td className="px-4 py-3 text-gray-400">
+                    {cliente.telefone || "-"}
+                  </td>
 
-          <div className="rounded-[24px] border border-yellow-600/20 bg-[#0a0a0a] p-5">
-            <p className="text-sm text-zinc-400">Fechadas</p>
-            <h3 className="mt-2 text-3xl font-bold">{resumo.fechadas}</h3>
-          </div>
-        </section>
+                  <td className="px-4 py-3">
+                    <span className="text-xs px-2 py-1 rounded bg-amber-600 text-white">
+                      {cliente.status || "Ativo"}
+                    </span>
+                  </td>
 
-        {/* DADOS + OBSERVAÇÕES */}
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_0.8fr]">
-          <div className="rounded-[30px] border border-yellow-600/15 bg-[#0a0a0a] p-6">
-            <div className="mb-6">
-              <h2 className="text-4xl font-bold">Dados do cliente</h2>
-              <p className="mt-3 text-base text-zinc-400">
-                Informações principais para consulta rápida da operação.
-              </p>
-            </div>
+                  <td className="px-4 py-3 text-right">
 
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              <div className="rounded-[22px] border border-zinc-800 bg-[#111111] p-5">
-                <p className="text-sm text-zinc-500">Nome</p>
-                <h3 className="mt-2 text-xl font-semibold">{cliente.nome || "-"}</h3>
-              </div>
-
-              <div className="rounded-[22px] border border-zinc-800 bg-[#111111] p-5">
-                <p className="text-sm text-zinc-500">CPF / CNPJ</p>
-                <h3 className="mt-2 text-xl font-semibold break-all">{cliente.cpf_cnpj || "-"}</h3>
-              </div>
-
-              <div className="rounded-[22px] border border-zinc-800 bg-[#111111] p-5">
-                <p className="text-sm text-zinc-500">E-mail</p>
-                <h3 className="mt-2 text-xl font-semibold break-all">{cliente.email || "-"}</h3>
-              </div>
-
-              <div className="rounded-[22px] border border-zinc-800 bg-[#111111] p-5">
-                <p className="text-sm text-zinc-500">Telefone</p>
-                <h3 className="mt-2 text-xl font-semibold">{cliente.telefone || "-"}</h3>
-              </div>
-
-              <div className="rounded-[22px] border border-zinc-800 bg-[#111111] p-5">
-                <p className="text-sm text-zinc-500">Cidade</p>
-                <h3 className="mt-2 text-xl font-semibold">{cliente.cidade || "-"}</h3>
-              </div>
-
-              <div className="rounded-[22px] border border-zinc-800 bg-[#111111] p-5">
-                <p className="text-sm text-zinc-500">Estado</p>
-                <h3 className="mt-2 text-xl font-semibold">{cliente.estado || "-"}</h3>
-              </div>
-
-              <div className="rounded-[22px] border border-zinc-800 bg-[#111111] p-5 md:col-span-2">
-                <p className="text-sm text-zinc-500">Cadastro no sistema</p>
-                <h3 className="mt-2 text-xl font-semibold">{formatarData(cliente.created_at)}</h3>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-[30px] border border-yellow-600/15 bg-[#0a0a0a] p-6">
-            <div className="mb-6">
-              <h2 className="text-4xl font-bold">Observações</h2>
-              <p className="mt-3 text-base text-zinc-400">
-                Informações úteis para acompanhar o contexto do cliente.
-              </p>
-            </div>
-
-            <div className="rounded-[22px] border border-zinc-800 bg-[#111111] p-5 min-h-[260px]">
-              <p className="whitespace-pre-wrap text-base leading-8 text-zinc-300">
-                {cliente.observacoes?.trim() || "Nenhuma observação cadastrada para este cliente."}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* HISTÓRICO DE COTAÇÕES */}
-        <section className="rounded-[30px] border border-yellow-600/15 bg-[#0a0a0a] p-6">
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-4xl font-bold">Histórico de cotações</h2>
-              <p className="mt-3 text-base text-zinc-400">
-                Acompanhe o que já foi movimentado para este cliente.
-              </p>
-            </div>
-
-            <Link
-              href={`/cotacoes/nova?cliente=${clienteId}`}
-              className="inline-flex rounded-xl bg-yellow-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-yellow-400"
-            >
-              Abrir nova cotação
-            </Link>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-[1100px] w-full border-collapse">
-              <thead>
-                <tr className="border-b border-yellow-600/10 text-left text-xs uppercase tracking-[0.25em] text-zinc-400">
-                  <th className="px-4 py-4">Cotação</th>
-                  <th className="px-4 py-4">Ramo</th>
-                  <th className="px-4 py-4">Seguradora</th>
-                  <th className="px-4 py-4">Valor</th>
-                  <th className="px-4 py-4">Status</th>
-                  <th className="px-4 py-4">Data</th>
-                  <th className="px-4 py-4">Ações</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {cotacoes.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-zinc-400">
-                      Este cliente ainda não possui cotações cadastradas.
-                    </td>
-                  </tr>
-                ) : (
-                  cotacoes.map((cotacao) => (
-                    <tr
-                      key={cotacao.id}
-                      className="border-b border-yellow-600/10 transition hover:bg-white/[0.02]"
+                    <Link
+                      href={`/clientes/${cliente.id}/editar`}
+                      className="text-sm text-amber-500 hover:text-amber-400"
                     >
-                      <td className="px-4 py-5 font-semibold text-white">
-                        {cotacao.id.slice(0, 8)}
-                      </td>
+                      Editar
+                    </Link>
 
-                      <td className="px-4 py-5 text-zinc-300">
-                        {cotacao.ramo || "-"}
-                      </td>
+                  </td>
+                </tr>
+              ))}
 
-                      <td className="px-4 py-5 text-zinc-300">
-                        {cotacao.seguradora || "-"}
-                      </td>
+              {clientesFiltrados.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="text-center py-10 text-gray-500"
+                  >
+                    Nenhum cliente encontrado
+                  </td>
+                </tr>
+              )}
 
-                      <td className="px-4 py-5 text-zinc-300">
-                        {formatarMoeda(cotacao.valor)}
-                      </td>
+            </tbody>
 
-                      <td className="px-4 py-5">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${corStatus(cotacao.status)}`}>
-                          {cotacao.status || "Sem status"}
-                        </span>
-                      </td>
+          </table>
 
-                      <td className="px-4 py-5 text-zinc-300">
-                        {formatarData(cotacao.created_at)}
-                      </td>
+        </div>
 
-                      <td className="px-4 py-5">
-                        <div className="flex flex-wrap gap-2">
-                          <Link
-                            href={`/cotacoes/${cotacao.id}`}
-                            className="rounded-lg border border-zinc-700 bg-[#111111] px-3 py-2 text-xs font-semibold text-white transition hover:border-yellow-500/30 hover:bg-[#151515]"
-                          >
-                            Ver
-                          </Link>
-
-                          <Link
-                            href={`/cotacoes/${cotacao.id}/editar`}
-                            className="rounded-lg border border-yellow-600/20 bg-yellow-500/10 px-3 py-2 text-xs font-semibold text-yellow-400 transition hover:bg-yellow-500/15"
-                          >
-                            Editar
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
       </div>
-    </div>
+    </SegmaxShell>
   );
 }
