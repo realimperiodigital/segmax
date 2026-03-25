@@ -1,407 +1,332 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   Building2,
   ClipboardList,
+  FileCheck2,
   FileText,
-  Home,
-  SearchCheck,
-  Shield,
+  ShieldCheck,
   Users,
+  UserSquare2,
   Wallet,
-  Briefcase,
-  UserCog,
-} from "lucide-react"
-
-export type SegmaxRole =
-  | "master"
-  | "diretora_tecnica"
-  | "diretora_financeira"
-  | "corretora_admin"
-  | "corretor"
-  | "usuario"
-  | "tecnico"
-  | "financeiro"
-
-type NavItem = {
-  href: string
-  label: string
-  description?: string
-  icon?: React.ComponentType<{ className?: string }>
-  exact?: boolean
-}
+  History,
+} from "lucide-react";
 
 type SegmaxSidebarProps = {
-  role: SegmaxRole | string
-  profileName?: string
-  name?: string
-  profileLabel?: string
-  label?: string
+  role: "master" | "financeiro" | "tecnico" | "corretora" | "usuario";
+};
+
+type MenuItem = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  subtitle?: string;
+};
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
 }
 
-function normalizeRole(role: string): SegmaxRole | string {
-  const value = String(role || "").trim().toLowerCase()
+export default function SegmaxSidebar({ role }: SegmaxSidebarProps) {
+  const pathname = usePathname();
 
-  if (value === "tecnico") return "diretora_tecnica"
-  if (value === "financeiro") return "diretora_financeira"
-
-  return value
-}
-
-function getProfileLabel(role: string) {
-  const normalized = normalizeRole(role)
-
-  switch (normalized) {
-    case "master":
-      return "SUPER MASTER"
-    case "diretora_tecnica":
-      return "DIRETORA TÉCNICA"
-    case "diretora_financeira":
-      return "DIRETORA FINANCEIRA"
-    case "corretora_admin":
-      return "CORRETORA ADMIN"
-    case "corretor":
-      return "CORRETOR"
-    case "usuario":
-      return "USUÁRIO"
-    default:
-      return "USUÁRIO"
-  }
-}
-
-function getNavItemsByRole(role: string): NavItem[] {
-  const normalized = normalizeRole(role)
-
-  if (normalized === "master") {
-    return [
-      {
-        href: "/dashboard/master",
-        label: "Centro de Controle",
-        description: "Painel principal",
-        icon: Home,
-        exact: true,
-      },
-      {
-        href: "/dashboard/master/corretoras",
-        label: "Corretoras",
-        description: "Gestão estrutural",
-        icon: Building2,
-      },
-      {
-        href: "/dashboard/master/usuarios",
-        label: "Usuários",
-        description: "Acessos e perfis",
-        icon: Users,
-      },
-      {
-        href: "/dashboard/master/clientes",
-        label: "Clientes",
-        description: "Base comercial",
-        icon: Briefcase,
-      },
-      {
-        href: "/dashboard/master/cotacoes",
-        label: "Cotações",
-        description: "Fluxo operacional",
-        icon: ClipboardList,
-      },
-      {
-        href: "/dashboard/master/analises",
-        label: "Análise Técnica",
-        description: "Pareceres e revisão",
-        icon: SearchCheck,
-      },
-      {
-        href: "/dashboard/master/propostas",
-        label: "Propostas",
-        description: "Área comercial",
-        icon: FileText,
-      },
-      {
-        href: "/dashboard/master/financeiro",
-        label: "Financeiro",
-        description: "Controle financeiro",
-        icon: Wallet,
-      },
-      {
-        href: "/dashboard/master/aprovacoes-exclusao",
-        label: "Aprovações",
-        description: "Exclusões pendentes",
-        icon: Shield,
-      },
-      {
-        href: "/dashboard/master/auditoria",
-        label: "Auditoria",
-        description: "Logs completos",
-        icon: UserCog,
-      },
-    ]
-  }
-
-  if (normalized === "diretora_tecnica") {
-    return [
-      {
-        href: "/dashboard/tecnico",
-        label: "Centro Técnico",
-        description: "Painel principal",
-        icon: Home,
-        exact: true,
-      },
-      {
-        href: "/dashboard/tecnico/analises",
-        label: "Análise Técnica",
-        description: "Fila técnica",
-        icon: SearchCheck,
-      },
-      {
-        href: "/dashboard/tecnico/clientes",
-        label: "Clientes",
-        description: "Consulta técnica",
-        icon: Briefcase,
-      },
-      {
-        href: "/dashboard/tecnico/corretoras",
-        label: "Corretoras",
-        description: "Parceiros da operação",
-        icon: Building2,
-      },
-      {
-        href: "/dashboard/tecnico/seguradoras",
-        label: "Seguradoras",
-        description: "Mercado e produtos",
-        icon: Shield,
-      },
-      {
-        href: "/dashboard/tecnico/cotacoes",
-        label: "Cotações",
-        description: "Análises em andamento",
-        icon: ClipboardList,
-      },
-      {
-        href: "/dashboard/tecnico/propostas",
-        label: "Propostas",
-        description: "Fluxo técnico",
-        icon: FileText,
-      },
-    ]
-  }
-
-  if (normalized === "diretora_financeira") {
-    return [
-      {
-        href: "/dashboard/financeiro",
-        label: "Centro Financeiro",
-        description: "Painel principal",
-        icon: Home,
-        exact: true,
-      },
-      {
-        href: "/dashboard/financeiro/painel",
-        label: "Painel",
-        description: "Visão financeira",
-        icon: Wallet,
-      },
-      {
-        href: "/dashboard/financeiro/corretoras",
-        label: "Corretoras",
-        description: "Acompanhamento",
-        icon: Building2,
-      },
-      {
-        href: "/dashboard/financeiro/clientes",
-        label: "Clientes",
-        description: "Base operacional",
-        icon: Briefcase,
-      },
-      {
-        href: "/dashboard/financeiro/cotacoes",
-        label: "Cotações",
-        description: "Fluxo comercial",
-        icon: ClipboardList,
-      },
-      {
-        href: "/dashboard/financeiro/propostas",
-        label: "Propostas",
-        description: "Pipeline e repasses",
-        icon: FileText,
-      },
-    ]
-  }
-
-  if (normalized === "corretora_admin") {
-    return [
-      {
-        href: "/dashboard/corretora",
-        label: "Centro de Controle",
-        description: "Painel da corretora",
-        icon: Home,
-        exact: true,
-      },
-      {
-        href: "/dashboard/corretora/clientes",
-        label: "Clientes",
-        description: "Carteira da corretora",
-        icon: Briefcase,
-      },
-      {
-        href: "/dashboard/corretora/cotacoes",
-        label: "Cotações",
-        description: "Fluxo comercial",
-        icon: ClipboardList,
-      },
-      {
-        href: "/dashboard/corretora/usuarios",
-        label: "Usuários",
-        description: "Equipe da corretora",
-        icon: Users,
-      },
-      {
-        href: "/dashboard/corretora/propostas",
-        label: "Propostas",
-        description: "Acompanhamento",
-        icon: FileText,
-      },
-    ]
-  }
-
-  return [
+  const masterItems: MenuItem[] = [
     {
-      href: "/dashboard/usuario",
       label: "Centro de Controle",
-      description: "Painel principal",
-      icon: Home,
-      exact: true,
+      href: "/dashboard/master",
+      icon: BarChart3,
+      subtitle: "Painel principal",
     },
     {
-      href: "/dashboard/usuario/clientes",
+      label: "Corretoras",
+      href: "/corretoras",
+      icon: Building2,
+      subtitle: "Gestão estrutural",
+    },
+    {
+      label: "Usuários",
+      href: "/usuarios",
+      icon: Users,
+      subtitle: "Acessos e perfis",
+    },
+    {
+      label: "Seguradoras",
+      href: "/seguradoras",
+      icon: ShieldCheck,
+      subtitle: "Base seguradoras",
+    },
+    {
       label: "Clientes",
-      description: "Base do usuário",
-      icon: Briefcase,
+      href: "/clientes",
+      icon: UserSquare2,
+      subtitle: "Base comercial",
     },
     {
-      href: "/dashboard/usuario/cotacoes",
       label: "Cotações",
-      description: "Fluxo operacional",
+      href: "/cotacoes",
       icon: ClipboardList,
+      subtitle: "Fluxo operacional",
     },
-  ]
-}
+    {
+      label: "Análise Técnica",
+      href: "/analise-tecnica",
+      icon: FileCheck2,
+      subtitle: "Pareceres e revisão",
+    },
+    {
+      label: "Propostas",
+      href: "/propostas",
+      icon: FileText,
+      subtitle: "Área comercial",
+    },
+    {
+      label: "Financeiro",
+      href: "/dashboard/financeiro",
+      icon: Wallet,
+      subtitle: "Controle financeiro",
+    },
+    {
+      label: "Aprovações",
+      href: "/aprovacoes-exclusao",
+      icon: ShieldCheck,
+      subtitle: "Exclusões pendentes",
+    },
+    {
+      label: "Auditoria",
+      href: "/exclusoes-historico",
+      icon: History,
+      subtitle: "Logs completos",
+    },
+  ];
 
-function isActive(pathname: string, href: string, exact?: boolean) {
-  if (exact) return pathname === href
-  return pathname === href || pathname.startsWith(`${href}/`)
-}
+  const tecnicoItems: MenuItem[] = [
+    {
+      label: "Painel Técnico",
+      href: "/dashboard/tecnico",
+      icon: BarChart3,
+      subtitle: "Visão técnica",
+    },
+    {
+      label: "Análise Técnica",
+      href: "/analise-tecnica",
+      icon: FileCheck2,
+      subtitle: "Pareceres e revisão",
+    },
+    {
+      label: "Cotações",
+      href: "/cotacoes",
+      icon: ClipboardList,
+      subtitle: "Fluxo operacional",
+    },
+    {
+      label: "Propostas",
+      href: "/propostas",
+      icon: FileText,
+      subtitle: "Área comercial",
+    },
+    {
+      label: "Corretoras",
+      href: "/corretoras",
+      icon: Building2,
+      subtitle: "Consulta estrutural",
+    },
+    {
+      label: "Usuários",
+      href: "/usuarios",
+      icon: Users,
+      subtitle: "Consulta acessos",
+    },
+  ];
 
-function Item({
-  item,
-  pathname,
-}: {
-  item: NavItem
-  pathname: string
-}) {
-  const active = isActive(pathname, item.href, item.exact)
-  const Icon = item.icon ?? Home
+  const financeiroItems: MenuItem[] = [
+    {
+      label: "Painel Financeiro",
+      href: "/dashboard/financeiro",
+      icon: BarChart3,
+      subtitle: "Visão financeira",
+    },
+    {
+      label: "Corretoras",
+      href: "/corretoras",
+      icon: Building2,
+      subtitle: "Consulta estrutural",
+    },
+    {
+      label: "Usuários",
+      href: "/usuarios",
+      icon: Users,
+      subtitle: "Consulta acessos",
+    },
+    {
+      label: "Propostas",
+      href: "/propostas",
+      icon: FileText,
+      subtitle: "Acompanhamento",
+    },
+  ];
+
+  const corretoraItems: MenuItem[] = [
+    {
+      label: "Painel Corretora",
+      href: "/dashboard/corretora",
+      icon: BarChart3,
+      subtitle: "Visão da corretora",
+    },
+    {
+      label: "Usuários",
+      href: "/usuarios",
+      icon: Users,
+      subtitle: "Equipe cadastrada",
+    },
+    {
+      label: "Clientes",
+      href: "/clientes",
+      icon: UserSquare2,
+      subtitle: "Base comercial",
+    },
+    {
+      label: "Cotações",
+      href: "/cotacoes",
+      icon: ClipboardList,
+      subtitle: "Fluxo operacional",
+    },
+    {
+      label: "Propostas",
+      href: "/propostas",
+      icon: FileText,
+      subtitle: "Área comercial",
+    },
+  ];
+
+  const usuarioItems: MenuItem[] = [
+    {
+      label: "Meu Painel",
+      href: "/dashboard/usuario",
+      icon: BarChart3,
+      subtitle: "Visão resumida",
+    },
+    {
+      label: "Clientes",
+      href: "/clientes",
+      icon: UserSquare2,
+      subtitle: "Minha base",
+    },
+    {
+      label: "Cotações",
+      href: "/cotacoes",
+      icon: ClipboardList,
+      subtitle: "Minhas cotações",
+    },
+    {
+      label: "Propostas",
+      href: "/propostas",
+      icon: FileText,
+      subtitle: "Minhas propostas",
+    },
+  ];
+
+  const menuMap: Record<SegmaxSidebarProps["role"], MenuItem[]> = {
+    master: masterItems,
+    tecnico: tecnicoItems,
+    financeiro: financeiroItems,
+    corretora: corretoraItems,
+    usuario: usuarioItems,
+  };
+
+  const items = menuMap[role] ?? masterItems;
 
   return (
-    <Link
-      href={item.href}
-      className={[
-        "group flex items-center justify-between rounded-2xl border px-4 py-4 transition",
-        active
-          ? "border-yellow-500/40 bg-yellow-500/10"
-          : "border-zinc-800 bg-zinc-950 hover:border-yellow-500/20 hover:bg-zinc-900",
-      ].join(" ")}
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        <div
-          className={[
-            "mt-0.5 rounded-xl p-2",
-            active ? "bg-yellow-500/15 text-yellow-400" : "bg-zinc-900 text-zinc-400",
-          ].join(" ")}
-        >
-          <Icon className="h-4 w-4" />
-        </div>
-
-        <div className="min-w-0">
-          <div
-            className={[
-              "truncate text-base font-semibold",
-              active ? "text-white" : "text-zinc-100",
-            ].join(" ")}
-          >
-            {item.label}
-          </div>
-
-          {item.description ? (
-            <div className="mt-1 text-sm text-zinc-500">{item.description}</div>
-          ) : null}
-        </div>
-      </div>
-
-      <span
-        className={[
-          "text-lg transition",
-          active ? "text-yellow-400" : "text-zinc-500 group-hover:text-zinc-300",
-        ].join(" ")}
-      >
-        ›
-      </span>
-    </Link>
-  )
-}
-
-export default function SegmaxSidebar({
-  role,
-  profileName,
-  name,
-  profileLabel,
-  label,
-}: SegmaxSidebarProps) {
-  const pathname = usePathname()
-  const items = getNavItemsByRole(role)
-  const displayName = profileName || name || "Usuário"
-  const displayLabel = profileLabel || label || getProfileLabel(role)
-
-  return (
-    <aside className="w-full max-w-[280px] border-r border-zinc-900 bg-black px-5 py-6">
-      <div className="rounded-[28px] border border-yellow-500/20 bg-zinc-950 p-4">
-        <div className="flex justify-center rounded-[20px] bg-black p-5">
-          <div className="flex h-28 w-28 items-center justify-center rounded-2xl border border-yellow-500/20 bg-zinc-950 text-center">
-            <div>
-              <div className="text-4xl font-black tracking-tight text-yellow-400">SM</div>
-              <div className="mt-1 text-sm font-semibold tracking-[0.25em] text-zinc-300">
-                SEGMAX
-              </div>
+    <aside className="w-[100px] min-h-screen border-r border-zinc-800 bg-black px-2 py-3">
+      <div className="mb-4 flex flex-col items-center">
+        <div className="mb-2 flex h-[58px] w-[58px] items-center justify-center rounded-xl border border-amber-500/40 bg-zinc-950 shadow-[0_0_20px_rgba(245,158,11,0.10)]">
+          <div className="text-center leading-none">
+            <div className="text-[11px] font-bold tracking-wide text-amber-400">
+              SM
+            </div>
+            <div className="mt-1 text-[6px] tracking-[0.25em] text-zinc-500">
+              SEGMAX
             </div>
           </div>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-zinc-800 bg-black p-4">
-          <div className="text-xs uppercase tracking-[0.35em] text-zinc-500">
+        <div className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-2 py-2">
+          <div className="mb-1 text-[6px] uppercase tracking-[0.28em] text-zinc-500">
             Perfil conectado
           </div>
-
-          <div className="mt-4 text-[20px] font-bold text-white">{displayName}</div>
-
-          <div className="mt-2 text-sm font-semibold uppercase tracking-[0.3em] text-yellow-400">
-            {displayLabel}
+          <div className="text-[10px] font-semibold text-white">Usuário</div>
+          <div className="text-[8px] uppercase tracking-[0.18em] text-amber-400">
+            {role === "master"
+              ? "Super Master"
+              : role === "tecnico"
+                ? "Técnico"
+                : role === "financeiro"
+                  ? "Financeiro"
+                  : role === "corretora"
+                    ? "Corretora"
+                    : "Usuário"}
           </div>
         </div>
       </div>
 
-      <div className="mt-8">
-        <div className="mb-4 text-xs uppercase tracking-[0.35em] text-zinc-500">
-          Navegação
-        </div>
-
-        <nav className="space-y-3">
-          {items.map((item) => (
-            <Item key={item.href} item={item} pathname={pathname} />
-          ))}
-        </nav>
+      <div className="mb-2 px-1 text-[6px] uppercase tracking-[0.28em] text-zinc-500">
+        Navegação
       </div>
+
+      <nav className="flex flex-col gap-2">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cx(
+                "group rounded-xl border px-2 py-2 transition-all",
+                active
+                  ? "border-amber-500/70 bg-amber-500/10 shadow-[0_0_18px_rgba(245,158,11,0.10)]"
+                  : "border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <div
+                  className={cx(
+                    "flex h-6 w-6 items-center justify-center rounded-lg border",
+                    active
+                      ? "border-amber-500/40 bg-amber-500/10"
+                      : "border-zinc-800 bg-black"
+                  )}
+                >
+                  <Icon
+                    className={cx(
+                      "h-3.5 w-3.5",
+                      active ? "text-amber-400" : "text-zinc-400"
+                    )}
+                  />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={cx(
+                      "truncate text-[8px] font-semibold",
+                      active ? "text-white" : "text-zinc-200"
+                    )}
+                  >
+                    {item.label}
+                  </div>
+                  <div className="truncate text-[6px] text-zinc-500">
+                    {item.subtitle || ""}
+                  </div>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </nav>
     </aside>
-  )
+  );
 }
