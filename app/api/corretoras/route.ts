@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const nome = String(body?.nome ?? "").trim();
+    const nomeFantasia = String(body?.nome_fantasia ?? nome).trim();
     const cnpj = String(body?.cnpj ?? "").trim();
     const email = String(body?.email ?? "").trim();
     const telefone = String(body?.telefone ?? "").trim();
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
 
     const payload: Record<string, unknown> = {
       nome,
+      nome_fantasia: nomeFantasia || nome,
       cnpj: cnpj || null,
       email: email || null,
       telefone: telefone || null,
