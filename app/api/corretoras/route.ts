@@ -2,20 +2,38 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceRoleKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function getSupabase() {
-  return createClient(
-    supabaseUrl,
-    supabaseServiceRoleKey,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
-  );
+  return createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+function normalizarStatus(statusBruto: unknown): string {
+  const valor = String(statusBruto ?? "")
+    .trim()
+    .toLowerCase();
+
+  const mapa: Record<string, string> = {
+    ativo: "ativo",
+    ativa: "ativo",
+    suspenso: "suspenso",
+    suspensa: "suspenso",
+    bloqueado: "bloqueado",
+    bloqueada: "bloqueado",
+    inadimplente: "inadimplente",
+    cancelado: "cancelado",
+    cancelada: "cancelado",
+    inativo: "cancelado",
+    inativa: "cancelado",
+    "": "ativo",
+  };
+
+  return mapa[valor] ?? "ativo";
 }
 
 export async function GET() {
@@ -28,104 +46,79 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error(error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      console.error("GET /api/corretoras:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data, { status: 200 });
-
-  } catch (err: any) {
-    console.error(err);
-
+    return NextResponse.json(data ?? [], { status: 200 });
+  } catch (error) {
+    console.error("GET /api/corretoras fatal:", error);
     return NextResponse.json(
-      { error: err.message },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro interno ao buscar corretoras.",
+      },
       { status: 500 }
     );
   }
 }
 
-export async function POST(
-  request: NextRequest
-) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const nome = String(
-      body?.nome ?? ""
-    ).trim();
+    const nome = String(body?.nome ?? "").trim();
+    const nomeFantasia = String(body?.nome_fantasia ?? nome).trim();
+    const cnpj = String(body?.cnpj ?? "").trim();
+    const email = String(body?.email ?? "").trim();
+    const telefone = String(body?.telefone ?? "").trim();
+    const responsavel = String(body?.responsavel ?? "").trim();
+    const status = normalizarStatus(body?.status);
 
-    const nomeFantasia = String(
-      body?.nome_fantasia ?? nome
-    ).trim();
-
-    const cnpj = String(
-      body?.cnpj ?? ""
-    ).trim();
-
-    const email = String(
-      body?.email ?? ""
-    ).trim();
-
-    const telefone = String(
-      body?.telefone ?? ""
-    ).trim();
-
-    const responsavel = String(
-      body?.responsavel ?? ""
-    ).trim();
-
-    /* 🔥 STATUS FIXO CORRETO */
-
-    let status = String(
-      body?.status ?? "ativo"
-    )
-      .trim()
-      .toLowerCase();
-
-    /* normalização segura */
-
-    if (status === "ativa") status = "ativo";
-    if (status === "inativa") status = "cancelado";
-
-    const supabase = getSupabase();
-
-    const { data, error } =
-      await supabase
-        .from("corretoras")
-        .insert({
-          nome,
-          nome_fantasia: nomeFantasia || nome,
-          cnpj: cnpj || null,
-          email: email || null,
-          telefone: telefone || null,
-          responsavel: responsavel || null,
-          status,
-        })
-        .select("*")
-        .single();
-
-    if (error) {
-      console.error(error);
-
+    if (!nome) {
       return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
+        { error: "Nome da corretora é obrigatório." },
+        { status: 400 }
       );
     }
 
-    return NextResponse.json(
-      data,
-      { status: 201 }
-    );
+    const payload = {
+      nome,
+      nome_fantasia: nomeFantasia || nome,
+      cnpj: cnpj || null,
+      email: email || null,
+      telefone: telefone || null,
+      responsavel: responsavel || null,
+      status,
+    };
 
-  } catch (err: any) {
-    console.error(err);
+    console.log("POST /api/corretoras payload:", payload);
 
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+      .from("corretoras")
+      .insert(payload)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("POST /api/corretoras:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/corretoras fatal:", error);
     return NextResponse.json(
-      { error: err.message },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro interno ao criar corretora.",
+      },
       { status: 500 }
     );
   }
